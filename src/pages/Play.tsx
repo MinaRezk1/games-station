@@ -161,7 +161,6 @@ export default function Play() {
             <Timer remainingMs={remainingMs} totalMs={q.timeLimit * 1000} />
           </div>
           <h2 className="player-q-text">{q.text}</h2>
-          {q.description && <p className="player-q-desc">{q.description}</p>}
           <QuestionImage src={q.imageUrl} className="q-image-small" />
           <AnswerInput key={qIndex} question={q} sending={sending} onSubmit={submit} />
         </div>

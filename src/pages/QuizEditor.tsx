@@ -18,8 +18,8 @@ import {
   MIN_TIME,
   newQuestion,
   normalizeQuiz,
+  QUESTION_TYPES,
   questionNumber,
-  SLIDE_TYPES,
   THEMES,
   TYPE_HINTS,
   TYPE_ICONS,
@@ -28,7 +28,7 @@ import {
 } from '../lib/quiz';
 import { SHAPES } from '../components/OptionTile';
 import { SlidePreview } from '../components/SlidePreview';
-import type { Question, QuizSettings, SlideType } from '../types';
+import type { Question, QuestionType, QuizSettings } from '../types';
 
 type SaveState = 'saved' | 'pending' | 'saving' | 'error';
 
@@ -40,8 +40,7 @@ export default function QuizEditor() {
   const [slides, setSlides] = useState<Question[]>([]);
   const [settings, setSettings] = useState<QuizSettings>(DEFAULT_SETTINGS);
   const [selected, setSelected] = useState(0);
-  const [tab, setTab] = useState<'slide' | 'show'>('slide');
-  const [addOpen, setAddOpen] = useState(false);
+  const [quizSettingsOpen, setQuizSettingsOpen] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [version, setVersion] = useState(0);
@@ -49,6 +48,8 @@ export default function QuizEditor() {
   const [problem, setProblem] = useState('');
   const [launching, setLaunching] = useState(false);
   const [imgOpen, setImgOpen] = useState<number | null>(null);
+  const [qImgOpen, setQImgOpen] = useState(false);
+  const [dragFrom, setDragFrom] = useState<number | null>(null);
   const savedVersion = useRef(0);
 
   const isAdmin = !!user && !user.isAnonymous && isAdminEmail(user.email);
@@ -60,8 +61,8 @@ export default function QuizEditor() {
         if (!s.exists()) return setLoadError('المسابقة دي مش موجودة.');
         const quiz = normalizeQuiz(s.id, s.data());
         setTitle(quiz.title);
-        setSlides(quiz.questions.length ? quiz.questions : [newQuestion('choice')]);
         setSettings(quiz.settings);
+        setSlides(quiz.questions.length ? quiz.questions : [newQuestion(quiz.settings.questionType), newQuestion('leaderboard')]);
         setLoaded(true);
       })
       .catch((e) => setLoadError(friendlyError(e, 'ماقدرناش نفتح المسابقة.')));
@@ -121,9 +122,17 @@ export default function QuizEditor() {
     setProblem('');
   };
 
-  const current = slides[Math.min(selected, slides.length - 1)];
   const sel = Math.min(selected, slides.length - 1);
+  const current = slides[sel];
   const total = countQuestions(slides);
+  const hasBoardAfter = slides[sel + 1]?.type === 'leaderboard';
+
+  function select(i: number) {
+    setSelected(i);
+    setImgOpen(null);
+    setQImgOpen(false);
+    setQuizSettingsOpen(false);
+  }
 
   function setSlidesAnd(fn: (s: Question[]) => Question[]) {
     setSlides(fn);
@@ -134,12 +143,16 @@ export default function QuizEditor() {
     setSlidesAnd((s) => s.map((q, i) => (i === sel ? { ...q, ...patch } : q)));
   }
 
-  function addSlide(type: SlideType) {
-    const at = sel + 1;
-    setSlidesAnd((s) => [...s.slice(0, at), newQuestion(type), ...s.slice(at)]);
-    setSelected(at);
-    setAddOpen(false);
-    setTab('slide');
+  // سؤال جديد (بنفس نوع المسابقة) وبعده سلايد ترتيب
+  function addQuestion() {
+    const at = slides[sel + 1]?.type === 'leaderboard' ? sel + 2 : sel + 1;
+    setSlidesAnd((s) => [...s.slice(0, at), newQuestion(settings.questionType), newQuestion('leaderboard'), ...s.slice(at)]);
+    select(at);
+  }
+
+  function toggleBoardAfter(on: boolean) {
+    if (on && !hasBoardAfter) setSlidesAnd((s) => [...s.slice(0, sel + 1), newQuestion('leaderboard'), ...s.slice(sel + 1)]);
+    if (!on && hasBoardAfter) setSlidesAnd((s) => s.filter((_, i) => i !== sel + 1));
   }
 
   function moveSlide(dir: -1 | 1) {
@@ -154,30 +167,35 @@ export default function QuizEditor() {
   }
 
   function duplicateSlide() {
-    setSlidesAnd((s) => [...s.slice(0, sel + 1), { ...s[sel], options: [...s[sel].options], correct: [...s[sel].correct], accepted: [...s[sel].accepted], optionImages: [...s[sel].optionImages] }, ...s.slice(sel + 1)]);
-    setSelected(sel + 1);
+    const copy = { ...current, options: [...current.options], correct: [...current.correct], accepted: [...current.accepted], optionImages: [...current.optionImages] };
+    const extra = isQuestion(current) && hasBoardAfter ? [copy, newQuestion('leaderboard')] : [copy];
+    const at = isQuestion(current) && hasBoardAfter ? sel + 2 : sel + 1;
+    setSlidesAnd((s) => [...s.slice(0, at), ...extra, ...s.slice(at)]);
+    select(at);
   }
 
   function deleteSlide() {
-    if (slides.length <= 1) return;
-    if (!window.confirm('تمسح السلايد ده؟')) return;
-    setSlidesAnd((s) => s.filter((_, i) => i !== sel));
-    setSelected(Math.max(0, sel - 1));
+    if (isQuestion(current) && total <= 1) return;
+    if (!window.confirm(isQuestion(current) ? 'تمسح السؤال ده؟' : 'تمسح سلايد الترتيب ده؟')) return;
+    const removeBoard = isQuestion(current) && hasBoardAfter;
+    setSlidesAnd((s) => s.filter((_, i) => i !== sel && !(removeBoard && i === sel + 1)));
+    select(Math.max(0, sel - 1));
   }
 
   function setOption(oi: number, value: string) {
     editCurrent({ options: current.options.map((o, k) => (k === oi ? value : o)) });
   }
 
-  function moveOption(oi: number, dir: -1 | 1) {
-    const j = oi + dir;
-    if (j < 0 || j >= current.options.length) return;
-    const options = [...current.options];
-    [options[oi], options[j]] = [options[j], options[oi]];
-    const optionImages = current.options.map((_, k) => current.optionImages[k] ?? '');
-    [optionImages[oi], optionImages[j]] = [optionImages[j], optionImages[oi]];
-    const correct = current.correct.map((c) => (c === oi ? j : c === j ? oi : c));
-    editCurrent({ options, correct, optionImages: current.type === 'choice' ? optionImages : [] });
+  function moveOptionTo(from: number, to: number) {
+    if (from === to || to < 0 || to >= current.options.length) return;
+    const order = current.options.map((_, k) => k);
+    order.splice(to, 0, order.splice(from, 1)[0]);
+    editCurrent({
+      options: order.map((k) => current.options[k]),
+      optionImages: current.type === 'choice' ? order.map((k) => current.optionImages[k] ?? '') : [],
+      correct: current.correct.map((c) => order.indexOf(c)).sort((a, b) => a - b),
+    });
+    setImgOpen(null);
   }
 
   function removeOption(oi: number) {
@@ -209,12 +227,18 @@ export default function QuizEditor() {
     bump();
   }
 
+  function changeQuizType(type: QuestionType) {
+    if (type === settings.questionType) return;
+    if (!window.confirm(`تغيّر نوع كل الأسئلة لـ "${TYPE_LABELS[type]}"؟ الاختيارات والإجابات الصح ممكن تتمسح.`)) return;
+    setSettings((st) => ({ ...st, questionType: type }));
+    setSlidesAnd((s) => s.map((q) => (isQuestion(q) ? changeType(q, type) : q)));
+  }
+
   async function goLive() {
     if (!user) return;
     const issue = validateQuiz(slides);
     if (issue) {
-      setSelected(issue.index);
-      setTab('slide');
+      select(issue.index);
       setProblem(issue.message);
       return;
     }
@@ -278,34 +302,15 @@ export default function QuizEditor() {
         {/* لستة السلايدات */}
         <aside className="slide-list">
           <div className="slide-add">
-            <button className="btn btn-brand btn-wide" onClick={() => setAddOpen((o) => !o)} aria-expanded={addOpen}>
-              + سلايد جديد
+            <button className="btn btn-brand btn-wide" onClick={addQuestion}>
+              + سؤال جديد
             </button>
-            {addOpen && (
-              <div className="add-menu" role="menu">
-                {SLIDE_TYPES.map((t) => (
-                  <button key={t} role="menuitem" onClick={() => addSlide(t)}>
-                    <span className="add-icon" aria-hidden="true">
-                      {TYPE_ICONS[t]}
-                    </span>
-                    {TYPE_LABELS[t]}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
           <ol className="thumbs">
             {slides.map((s, i) => (
               <li key={i}>
                 <span className="thumb-num">{i + 1}</span>
-                <button
-                  className={`thumb ${i === sel ? 'is-on' : ''} ${s.type === 'leaderboard' ? 'is-board' : ''}`}
-                  onClick={() => {
-                    setSelected(i);
-                    setTab('slide');
-                    setImgOpen(null);
-                  }}
-                >
+                <button className={`thumb ${i === sel ? 'is-on' : ''} ${s.type === 'leaderboard' ? 'is-board' : ''}`} onClick={() => select(i)}>
                   <span className="thumb-type">
                     <span aria-hidden="true">{TYPE_ICONS[s.type]}</span> {TYPE_LABELS[s.type]}
                   </span>
@@ -326,157 +331,159 @@ export default function QuizEditor() {
             <button className="icon-btn" onClick={() => moveSlide(1)} disabled={sel === slides.length - 1} aria-label="نزّل السلايد لتحت" title="لتحت">
               ↓
             </button>
-            <button className="icon-btn" onClick={duplicateSlide} aria-label="كرّر السلايد" title="كرّر">
-              ⧉
-            </button>
-            <button className="icon-btn danger" onClick={deleteSlide} disabled={slides.length <= 1} aria-label="امسح السلايد" title="امسح">
+            {isQuestion(current) && (
+              <button className="icon-btn" onClick={duplicateSlide} aria-label="كرّر السؤال" title="كرّر">
+                ⧉
+              </button>
+            )}
+            <button
+              className="icon-btn danger"
+              onClick={deleteSlide}
+              disabled={isQuestion(current) && total <= 1}
+              aria-label="امسح السلايد"
+              title="امسح"
+            >
               ✕
             </button>
-            <span className="muted small">سلايد {sel + 1} من {slides.length}</span>
+            <span className="muted small">
+              سلايد {sel + 1} من {slides.length}
+            </span>
           </div>
         </section>
 
         {/* لوحة الإعدادات */}
         <aside className="panel">
-          <div className="panel-tabs" role="tablist">
-            <button role="tab" aria-selected={tab === 'slide'} className={tab === 'slide' ? 'is-on' : ''} onClick={() => setTab('slide')}>
-              المحتوى
-            </button>
-            <button role="tab" aria-selected={tab === 'show'} className={tab === 'show' ? 'is-on' : ''} onClick={() => setTab('show')}>
-              شكل العرض
-            </button>
+          <div className="panel-head">
+            <span className="panel-head-icon" aria-hidden="true">
+              {TYPE_ICONS[current.type]}
+            </span>
+            <b>{TYPE_LABELS[current.type]}</b>
+            {isQuestion(current) && <span className="muted small">سؤال {questionNumber(slides, sel)}</span>}
           </div>
 
-          {tab === 'show' ? (
-            <div className="panel-body">
-              <div className="panel-section">
-                <h3>الخلفية</h3>
-                <div className="theme-grid">
-                  {THEMES.map((t) => (
-                    <button
-                      key={t.id}
-                      className={`theme-swatch theme-${t.id} ${settings.theme === t.id ? 'is-on' : ''}`}
-                      onClick={() => setSetting({ theme: t.id })}
-                      aria-pressed={settings.theme === t.id}
-                    >
-                      <span>{t.label}</span>
-                    </button>
-                  ))}
-                </div>
-                {settings.theme === 'custom' && (
-                  <label className="panel-field">
-                    <span>لينك الصورة</span>
-                    <input
-                      dir="ltr"
-                      placeholder="https://..."
-                      value={settings.backgroundUrl}
-                      onChange={(e) => setSetting({ backgroundUrl: e.target.value })}
-                    />
-                  </label>
-                )}
+          <div className="panel-body">
+            {!isQuestion(current) ? (
+              <div className="panel-block">
+                <p className="muted">{TYPE_HINTS.leaderboard}</p>
+                <button className="btn btn-danger-line" onClick={deleteSlide}>
+                  امسح سلايد الترتيب
+                </button>
               </div>
-              <div className="panel-section">
-                <Toggle
-                  label="نقط زيادة للإجابات الصح ورا بعض"
-                  hint="100 نقطة زيادة عن كل إجابة صح متتالية، لحد 500."
-                  checked={settings.streakBonus}
-                  onChange={(v) => setSetting({ streakBonus: v })}
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="panel-body">
-              <label className="panel-field">
-                <span>نوع السلايد</span>
-                <select value={current.type} onChange={(e) => editCurrent(changeType(current, e.target.value as SlideType))}>
-                  {SLIDE_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {TYPE_LABELS[t]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <p className="muted small">{TYPE_HINTS[current.type]}</p>
-
-              {isQuestion(current) && (
-                <>
-                  <label className="panel-field">
-                    <span>
-                      السؤال <small className="muted">{current.text.length}/250</small>
-                    </span>
+            ) : (
+              <>
+                {/* السؤال */}
+                <div className="panel-block">
+                  <Label text="السؤال" help={TYPE_HINTS[current.type]} />
+                  <div className="q-box">
                     <textarea
                       rows={3}
                       maxLength={250}
                       value={current.text}
                       placeholder="اكتب السؤال هنا"
+                      aria-label="السؤال"
                       onChange={(e) => editCurrent({ text: e.target.value })}
                     />
-                  </label>
+                    <div className="q-box-foot">
+                      <button
+                        className={`q-box-btn ${current.imageUrl ? 'has-img' : ''}`}
+                        onClick={() => setQImgOpen((o) => !o)}
+                        aria-expanded={qImgOpen}
+                        title="صورة مع السؤال"
+                      >
+                        🖼 صورة
+                      </button>
+                      <span className="muted small">{250 - current.text.length}</span>
+                    </div>
+                    {qImgOpen && (
+                      <input
+                        className="q-box-img"
+                        dir="ltr"
+                        autoFocus
+                        placeholder="لينك الصورة https://..."
+                        value={current.imageUrl}
+                        onChange={(e) => editCurrent({ imageUrl: e.target.value })}
+                      />
+                    )}
+                  </div>
+                </div>
 
-                  <label className="panel-field">
-                    <span>
-                      وصف أطول (اختياري) <small className="muted">{current.description.length}/500</small>
-                    </span>
-                    <textarea
-                      rows={2}
-                      maxLength={500}
-                      value={current.description}
-                      placeholder="كلام توضيحي يظهر تحت السؤال"
-                      onChange={(e) => editCurrent({ description: e.target.value })}
+                {/* الاختيارات */}
+                {(current.type === 'choice' || current.type === 'truefalse' || current.type === 'order') && (
+                  <div className="panel-block">
+                    <Label
+                      text={current.type === 'order' ? 'العناصر بالترتيب الصح' : 'الاختيارات'}
+                      help={current.type === 'order' ? 'هتظهر للاعبين متلخبطة.' : 'دوس على الدايرة عشان تعلّم الإجابة الصح.'}
                     />
-                  </label>
-
-                  <label className="panel-field">
-                    <span>صورة (اختياري)</span>
-                    <input
-                      dir="ltr"
-                      placeholder="https://..."
-                      value={current.imageUrl}
-                      onChange={(e) => editCurrent({ imageUrl: e.target.value })}
-                    />
-                    <small className="muted">كليك يمين على أي صورة في النت ← Copy image address، وحطه هنا.</small>
-                  </label>
-
-                  {(current.type === 'choice' || current.type === 'truefalse') && (
-                    <div className="panel-section">
-                      <h3>الاختيارات</h3>
+                    <div className="opt-grid">
                       {current.options.map((opt, oi) => (
-                        <div key={oi} className={`opt-row ${current.correct.includes(oi) ? 'is-correct' : ''}`}>
-                          <button
-                            className="correct-btn"
-                            onClick={() => toggleCorrect(oi)}
-                            aria-pressed={current.correct.includes(oi)}
-                            aria-label={current.correct.includes(oi) ? 'دي إجابة صح' : 'علّمها إجابة صح'}
-                            title="الإجابة الصح"
-                          >
-                            ✓
-                          </button>
+                        <div
+                          key={oi}
+                          className={`opt-line ${current.type !== 'order' && current.correct.includes(oi) ? 'is-correct' : ''} ${dragFrom === oi ? 'is-dragging' : ''}`}
+                          onDragOver={(e) => current.type !== 'truefalse' && e.preventDefault()}
+                          onDrop={() => {
+                            if (dragFrom !== null) moveOptionTo(dragFrom, oi);
+                            setDragFrom(null);
+                          }}
+                        >
+                          {current.type !== 'truefalse' && (
+                            <span
+                              className="opt-handle"
+                              draggable
+                              onDragStart={() => setDragFrom(oi)}
+                              onDragEnd={() => setDragFrom(null)}
+                              title="اسحب عشان ترتّب"
+                              aria-hidden="true"
+                            >
+                              ⋮⋮
+                            </span>
+                          )}
+                          {current.type === 'order' ? (
+                            <span className="opt-cell-num">{oi + 1}</span>
+                          ) : (
+                            <button
+                              className="correct-btn"
+                              onClick={() => toggleCorrect(oi)}
+                              aria-pressed={current.correct.includes(oi)}
+                              aria-label={current.correct.includes(oi) ? 'دي إجابة صح' : 'علّمها إجابة صح'}
+                            >
+                              ✓
+                            </button>
+                          )}
                           <span className={`opt-dot opt-dot-${oi}`} aria-hidden="true">
-                            {SHAPES[oi]}
+                            {current.type === 'order' ? '' : SHAPES[oi]}
                           </span>
                           {current.type === 'truefalse' ? (
                             <span className="opt-fixed">{opt}</span>
                           ) : (
-                            <input value={opt} maxLength={100} placeholder={`اختيار ${oi + 1}`} onChange={(e) => setOption(oi, e.target.value)} />
+                            <input
+                              value={opt}
+                              maxLength={100}
+                              placeholder={current.type === 'order' ? `العنصر ${oi + 1}` : `اختيار ${oi + 1}`}
+                              onChange={(e) => setOption(oi, e.target.value)}
+                              aria-label={`اختيار ${oi + 1}`}
+                            />
                           )}
                           {current.type === 'choice' && (
-                            <span className="opt-row-tools">
-                              <button
-                                onClick={() => setImgOpen(imgOpen === oi ? null : oi)}
-                                className={current.optionImages[oi] ? 'has-img' : ''}
-                                aria-label="صورة للاختيار"
-                                aria-expanded={imgOpen === oi}
-                                title="صورة للاختيار"
-                              >
-                                🖼
-                              </button>
-                              <button onClick={() => moveOption(oi, -1)} disabled={oi === 0} aria-label="لفوق">
-                                ↑
-                              </button>
-                              <button onClick={() => removeOption(oi)} disabled={current.options.length <= 2} aria-label="امسح">
-                                ✕
-                              </button>
-                            </span>
+                            <button
+                              className={`opt-cell-btn ${current.optionImages[oi] ? 'has-img' : ''}`}
+                              onClick={() => setImgOpen(imgOpen === oi ? null : oi)}
+                              aria-expanded={imgOpen === oi}
+                              aria-label="صورة للاختيار"
+                              title="صورة للاختيار"
+                            >
+                              🖼
+                            </button>
+                          )}
+                          {current.type !== 'truefalse' && (
+                            <button
+                              className="opt-cell-btn"
+                              onClick={() => removeOption(oi)}
+                              disabled={current.options.length <= 2}
+                              aria-label="امسح"
+                              title="امسح"
+                            >
+                              🗑
+                            </button>
                           )}
                           {current.type === 'choice' && imgOpen === oi && (
                             <input
@@ -490,70 +497,51 @@ export default function QuizEditor() {
                           )}
                         </div>
                       ))}
-                      {current.type === 'choice' && current.options.length < MAX_OPTIONS && (
-                        <button className="btn btn-line btn-small btn-wide" onClick={() => editCurrent({ options: [...current.options, ''] })}>
-                          + ضيف اختيار
-                        </button>
-                      )}
                     </div>
-                  )}
+                    {current.type !== 'truefalse' && current.options.length < MAX_OPTIONS && (
+                      <button className="btn btn-line btn-wide" onClick={() => editCurrent({ options: [...current.options, ''] })}>
+                        + ضيف
+                      </button>
+                    )}
+                  </div>
+                )}
 
-                  {current.type === 'order' && (
-                    <div className="panel-section">
-                      <h3>العناصر بالترتيب الصح</h3>
-                      {current.options.map((opt, oi) => (
-                        <div key={oi} className="opt-row">
-                          <span className="order-num">{oi + 1}</span>
-                          <input value={opt} maxLength={100} placeholder={`العنصر ${oi + 1}`} onChange={(e) => setOption(oi, e.target.value)} />
-                          <span className="opt-row-tools">
-                            <button onClick={() => moveOption(oi, -1)} disabled={oi === 0} aria-label="لفوق">
-                              ↑
-                            </button>
-                            <button onClick={() => removeOption(oi)} disabled={current.options.length <= 2} aria-label="امسح">
-                              ✕
-                            </button>
-                          </span>
-                        </div>
-                      ))}
-                      {current.options.length < MAX_OPTIONS && (
-                        <button className="btn btn-line btn-small btn-wide" onClick={() => editCurrent({ options: [...current.options, ''] })}>
-                          + ضيف عنصر
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {current.type === 'short' && (
-                    <div className="panel-section">
-                      <h3>الإجابات المقبولة</h3>
+                {current.type === 'short' && (
+                  <div className="panel-block">
+                    <Label text="الإجابات المقبولة" help="مش بتفرق الهمزات والتشكيل والحروف الكبيرة والصغيرة." />
+                    <div className="opt-grid">
                       {current.accepted.map((a, ai) => (
-                        <div key={ai} className="opt-row is-correct">
-                          <span className="order-num">✓</span>
+                        <div key={ai} className="opt-line is-correct">
+                          <span className="opt-cell-num">✓</span>
                           <input
                             value={a}
                             maxLength={100}
                             placeholder={ai === 0 ? 'الإجابة الصح' : 'شكل تاني مقبول'}
                             onChange={(e) => editCurrent({ accepted: current.accepted.map((x, k) => (k === ai ? e.target.value : x)) })}
                           />
-                          {current.accepted.length > 1 && (
-                            <span className="opt-row-tools">
-                              <button onClick={() => editCurrent({ accepted: current.accepted.filter((_, k) => k !== ai) })} aria-label="امسح">
-                                ✕
-                              </button>
-                            </span>
-                          )}
+                          <button
+                            className="opt-cell-btn"
+                            onClick={() => editCurrent({ accepted: current.accepted.filter((_, k) => k !== ai) })}
+                            disabled={current.accepted.length <= 1}
+                            aria-label="امسح"
+                          >
+                            🗑
+                          </button>
                         </div>
                       ))}
-                      {current.accepted.length < MAX_ACCEPTED && (
-                        <button className="btn btn-line btn-small btn-wide" onClick={() => editCurrent({ accepted: [...current.accepted, ''] })}>
-                          + ضيف إجابة مقبولة
-                        </button>
-                      )}
                     </div>
-                  )}
+                    {current.accepted.length < MAX_ACCEPTED && (
+                      <button className="btn btn-line btn-wide" onClick={() => editCurrent({ accepted: [...current.accepted, ''] })}>
+                        + ضيف
+                      </button>
+                    )}
+                  </div>
+                )}
 
-                  <div className="panel-section">
-                    <h3>النقط</h3>
+                {/* النقط */}
+                <div className="panel-block with-line">
+                  <div className="setting-row">
+                    <Label text="النقط" help="النقط اللي بياخدها اللي يجاوب صح." icon="★" />
                     <div className="points-row">
                       <label>
                         <span>أقصى</span>
@@ -579,56 +567,155 @@ export default function QuizEditor() {
                         />
                       </label>
                     </div>
-                    <Toggle
-                      label="الأسرع ياخد نقط أكتر"
-                      hint="النقط بتنزل من الأقصى للأقل على حسب وقت الإجابة."
-                      checked={current.speedBonus}
-                      onChange={(v) => editCurrent({ speedBonus: v })}
-                    />
                   </div>
+                  <Switch
+                    label="الأسرع ياخد نقط أكتر"
+                    help="النقط بتنزل من الأقصى للأقل على حسب وقت الإجابة."
+                    checked={current.speedBonus}
+                    onChange={(v) => editCurrent({ speedBonus: v })}
+                    indent
+                  />
+                </div>
 
-                  <div className="panel-section">
-                    <label className="panel-field panel-inline">
-                      <span>الوقت</span>
-                      <span className="time-input">
-                        <input
-                          type="number"
-                          min={MIN_TIME}
-                          max={MAX_TIME}
-                          value={current.timeLimit}
-                          onChange={(e) => editCurrent({ timeLimit: Number(e.target.value) })}
-                        />
-                        ثانية
-                      </span>
-                    </label>
-                    {current.type === 'choice' && (
-                      <Toggle
-                        label="اخلط ترتيب الاختيارات"
-                        hint="كل مرة تعرض السؤال الاختيارات هتظهر بترتيب مختلف."
-                        checked={current.shuffle}
-                        onChange={(v) => editCurrent({ shuffle: v })}
+                {/* الوقت */}
+                <div className="panel-block with-line">
+                  <div className="setting-row">
+                    <Label text="الوقت" help={`من ${MIN_TIME} لـ ${MAX_TIME} ثانية.`} icon="⏱" />
+                    <span className="time-input">
+                      <input
+                        type="number"
+                        min={MIN_TIME}
+                        max={MAX_TIME}
+                        value={current.timeLimit}
+                        onChange={(e) => editCurrent({ timeLimit: Number(e.target.value) })}
+                        aria-label="الوقت بالثواني"
                       />
-                    )}
+                      ثانية
+                    </span>
                   </div>
-                </>
+                  {current.type === 'choice' && (
+                    <Switch
+                      label="اخلط ترتيب الاختيارات"
+                      help="الاختيارات هتظهر بترتيب مختلف كل مرة."
+                      checked={current.shuffle}
+                      onChange={(v) => editCurrent({ shuffle: v })}
+                      indent
+                    />
+                  )}
+                </div>
+
+                {/* الترتيب */}
+                <div className="panel-block with-line">
+                  <Switch
+                    label="الترتيب"
+                    help="اعرض ترتيب اللاعبين بعد السؤال ده."
+                    icon="🏆"
+                    checked={hasBoardAfter}
+                    onChange={toggleBoardAfter}
+                  />
+                </div>
+              </>
+            )}
+
+            {/* إعدادات المسابقة */}
+            <div className="panel-block with-line">
+              <button className="settings-link" onClick={() => setQuizSettingsOpen((o) => !o)} aria-expanded={quizSettingsOpen}>
+                <span aria-hidden="true">⚙</span>
+                <b>إعدادات المسابقة</b>
+                <span className="settings-caret" aria-hidden="true">
+                  {quizSettingsOpen ? '⌃' : '‹'}
+                </span>
+              </button>
+              {quizSettingsOpen && (
+                <div className="quiz-settings">
+                  <label className="panel-field">
+                    <span>نوع الأسئلة</span>
+                    <select value={settings.questionType} onChange={(e) => changeQuizType(e.target.value as QuestionType)}>
+                      {QUESTION_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {TYPE_LABELS[t]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="panel-field">
+                    <span>الخلفية</span>
+                    <div className="theme-grid">
+                      {THEMES.map((t) => (
+                        <button
+                          key={t.id}
+                          className={`theme-swatch theme-${t.id} ${settings.theme === t.id ? 'is-on' : ''}`}
+                          onClick={() => setSetting({ theme: t.id })}
+                          aria-pressed={settings.theme === t.id}
+                        >
+                          <span>{t.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {settings.theme === 'custom' && (
+                    <label className="panel-field">
+                      <span>لينك صورة الخلفية</span>
+                      <input
+                        dir="ltr"
+                        placeholder="https://..."
+                        value={settings.backgroundUrl}
+                        onChange={(e) => setSetting({ backgroundUrl: e.target.value })}
+                      />
+                    </label>
+                  )}
+                  <Switch
+                    label="نقط زيادة للإجابات الصح ورا بعض"
+                    help="100 نقطة زيادة عن كل إجابة صح متتالية، لحد 500."
+                    checked={settings.streakBonus}
+                    onChange={(v) => setSetting({ streakBonus: v })}
+                  />
+                </div>
               )}
             </div>
-          )}
+          </div>
         </aside>
       </div>
     </div>
   );
 }
 
-function Toggle({ label, hint, checked, onChange }: { label: string; hint: string; checked: boolean; onChange: (v: boolean) => void }) {
+function Label({ text, help, icon }: { text: string; help: string; icon?: string }) {
   return (
-    <label className="toggle">
+    <span className="panel-label">
+      {icon && (
+        <span className="panel-label-icon" aria-hidden="true">
+          {icon}
+        </span>
+      )}
+      <b>{text}</b>
+      <span className="help" title={help} aria-label={help} tabIndex={0}>
+        ?
+      </span>
+    </span>
+  );
+}
+
+function Switch({
+  label,
+  help,
+  icon,
+  checked,
+  onChange,
+  indent,
+}: {
+  label: string;
+  help: string;
+  icon?: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  indent?: boolean;
+}) {
+  return (
+    <label className={`switch-row ${indent ? 'is-indent' : ''}`}>
+      <Label text={label} help={help} icon={icon} />
       <input type="checkbox" role="switch" checked={checked} onChange={(e) => onChange(e.target.checked)} />
       <span className="toggle-track" aria-hidden="true" />
-      <span className="toggle-text">
-        <b>{label}</b>
-        <small>{hint}</small>
-      </span>
     </label>
   );
 }

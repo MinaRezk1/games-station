@@ -25,6 +25,7 @@ export interface Question {
 }
 
 export interface QuizSettings {
+  questionType: QuestionType; // نوع الأسئلة في المسابقة كلها
   streakBonus: boolean;
   theme: ThemeId;
   backgroundUrl: string;

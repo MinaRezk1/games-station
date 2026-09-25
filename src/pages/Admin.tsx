@@ -15,7 +15,8 @@ import { auth, db, googleProvider, isAdminEmail } from '../firebase';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { friendlyError } from '../lib/errors';
 import { createRoom } from '../lib/game';
-import { countQuestions, DEFAULT_SETTINGS, newQuestion, normalizeQuiz, validateQuiz } from '../lib/quiz';
+import { countQuestions, DEFAULT_SETTINGS, newQuestion, normalizeQuiz, QUESTION_TYPES, TYPE_HINTS, TYPE_ICONS, TYPE_LABELS, validateQuiz } from '../lib/quiz';
+import type { QuestionType } from '../types';
 import type { Quiz } from '../types';
 
 export default function Admin() {
@@ -24,6 +25,7 @@ export default function Admin() {
   const [quizzes, setQuizzes] = useState<Quiz[] | null>(null);
   const [busyId, setBusyId] = useState('');
   const [error, setError] = useState('');
+  const [picking, setPicking] = useState(false);
 
   const isAdmin = !!user && !user.isAnonymous && isAdminEmail(user.email);
 
@@ -49,15 +51,16 @@ export default function Admin() {
     }
   }
 
-  async function newQuiz() {
+  async function newQuiz(type: QuestionType) {
     if (!user) return;
+    setPicking(false);
     setBusyId('new');
     try {
       const ref = await addDoc(collection(db, 'quizzes'), {
         ownerId: user.uid,
         title: 'مسابقة جديدة',
-        settings: { ...DEFAULT_SETTINGS, v: 3 },
-        questions: [newQuestion('choice')],
+        settings: { ...DEFAULT_SETTINGS, questionType: type, v: 3 },
+        questions: [newQuestion(type), newQuestion('leaderboard')],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -127,7 +130,7 @@ export default function Admin() {
       <header className="page-head">
         <h1 className="page-title">مسابقاتك</h1>
         <div className="row">
-          <button className="btn btn-brand" onClick={newQuiz} disabled={busyId === 'new'}>
+          <button className="btn btn-brand" onClick={() => setPicking(true)} disabled={busyId === 'new'}>
             مسابقة جديدة
           </button>
           <button className="btn btn-line" onClick={() => signOut(auth)}>
@@ -138,12 +141,34 @@ export default function Admin() {
 
       {error && <p className="error" role="alert">{error}</p>}
 
+      {picking && (
+        <section className="type-choose" aria-label="اختار نوع الأسئلة">
+          <div className="type-choose-head">
+            <h2>المسابقة هتبقى أسئلتها من نوع إيه؟</h2>
+            <button className="icon-btn" onClick={() => setPicking(false)} aria-label="إلغاء">
+              ✕
+            </button>
+          </div>
+          <div className="type-cards">
+            {QUESTION_TYPES.map((t) => (
+              <button key={t} className="type-card" onClick={() => newQuiz(t)} disabled={busyId === 'new'}>
+                <span className="type-card-icon" aria-hidden="true">
+                  {TYPE_ICONS[t]}
+                </span>
+                <b>{TYPE_LABELS[t]}</b>
+                <small>{TYPE_HINTS[t]}</small>
+              </button>
+            ))}
+          </div>
+        </section>
+      )}
+
       {quizzes === null ? (
         <p className="muted">بنحمّل…</p>
       ) : quizzes.length === 0 ? (
         <div className="empty">
           <p>لسه ماعملتش أي مسابقة.</p>
-          <button className="btn btn-brand" onClick={newQuiz}>
+          <button className="btn btn-brand" onClick={() => setPicking(true)}>
             اعمل أول مسابقة
           </button>
         </div>

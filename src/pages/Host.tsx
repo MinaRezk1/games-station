@@ -213,7 +213,6 @@ export default function Host() {
           </div>
           <div className="host-q-head">
             <h2 className="host-q-text">{q.text}</h2>
-            {q.description && <p className="host-q-desc">{q.description}</p>}
           </div>
           <div className="host-q-body">
             <QuestionImage src={q.imageUrl} />
@@ -248,7 +247,6 @@ export default function Host() {
         </div>
         <div className="host-q-head">
           <h2 className="host-q-text">{q.text}</h2>
-          {q.description && <p className="host-q-desc">{q.description}</p>}
         </div>
         <div className="host-q-body">
           <QuestionImage src={q.imageUrl} />

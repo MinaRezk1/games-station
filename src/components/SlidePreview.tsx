@@ -36,7 +36,6 @@ export function SlidePreview({ slide, settings, number, total }: Props) {
           </p>
           <div className="slide-q-head">
             <h3 className={`slide-q-text ${slide.text.trim() ? '' : 'is-empty'}`}>{slide.text.trim() || 'اكتب السؤال…'}</h3>
-            {slide.description.trim() && <p className="slide-q-desc">{slide.description}</p>}
           </div>
           <QuestionImage src={slide.imageUrl.startsWith('https://') ? slide.imageUrl : ''} className="slide-img" />
           {slide.type === 'short' ? (

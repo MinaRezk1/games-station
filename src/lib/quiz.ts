@@ -44,7 +44,7 @@ export const THEMES: { id: ThemeId; label: string }[] = [
   { id: 'custom', label: 'صورة من عندك' },
 ];
 
-export const DEFAULT_SETTINGS: QuizSettings = { streakBonus: false, theme: 'classic', backgroundUrl: '' };
+export const DEFAULT_SETTINGS: QuizSettings = { questionType: 'choice', streakBonus: false, theme: 'classic', backgroundUrl: '' };
 
 export function isQuestion(s: Question): s is Question & { type: QuestionType } {
   return s.type !== 'leaderboard';
@@ -142,9 +142,10 @@ export function normalizeQuestion(raw: unknown): Question {
   };
 }
 
-export function normalizeSettings(raw: unknown): QuizSettings {
+export function normalizeSettings(raw: unknown, fallbackType: QuestionType = 'choice'): QuizSettings {
   const r = (raw ?? {}) as Record<string, unknown>;
   return {
+    questionType: QUESTION_TYPES.includes(r.questionType as QuestionType) ? (r.questionType as QuestionType) : fallbackType,
     streakBonus: !!r.streakBonus,
     theme: THEME_IDS.includes(r.theme as ThemeId) ? (r.theme as ThemeId) : 'classic',
     backgroundUrl: String(r.backgroundUrl ?? ''),
@@ -166,7 +167,7 @@ export function normalizeQuiz(id: string, raw: Record<string, unknown>): Quiz {
     ownerId: String(raw.ownerId ?? ''),
     title: String(raw.title ?? ''),
     questions,
-    settings: normalizeSettings(raw.settings),
+    settings: normalizeSettings(raw.settings, (questions.find(isQuestion)?.type as QuestionType | undefined) ?? 'choice'),
     updatedAt: (raw.updatedAt as Quiz['updatedAt']) ?? null,
   };
 }

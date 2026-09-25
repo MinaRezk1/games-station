@@ -9,11 +9,12 @@ interface Props {
   onClick?: () => void;
   disabled?: boolean;
   big?: boolean;
+  image?: string;
 }
 
-export function OptionTile({ index, text, state = 'normal', count, total, onClick, disabled, big }: Props) {
+export function OptionTile({ index, text, state = 'normal', count, total, onClick, disabled, big, image }: Props) {
   const color = index % SHAPES.length;
-  const className = `opt opt-${color} ${state !== 'normal' ? `is-${state}` : ''} ${big ? 'opt-big' : ''}`;
+  const className = `opt opt-${color} ${state !== 'normal' ? `is-${state}` : ''} ${big ? 'opt-big' : ''} ${image ? 'has-img' : ''}`;
   const pct = count !== undefined && total ? Math.round((count / total) * 100) : 0;
   const content = (
     <>
@@ -21,7 +22,10 @@ export function OptionTile({ index, text, state = 'normal', count, total, onClic
       <span className="opt-shape" aria-hidden="true">
         {SHAPES[color]}
       </span>
-      <span className="opt-text">{text}</span>
+      <span className="opt-text">
+        {image && <img className="opt-img" src={image} alt="" referrerPolicy="no-referrer" />}
+        {text}
+      </span>
       {count !== undefined && (
         <span className="opt-count">
           <b>{count}</b>

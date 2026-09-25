@@ -8,7 +8,9 @@ export type ThemeId = 'classic' | 'midnight' | 'sunrise' | 'garden' | 'ruby' | '
 export interface Question {
   type: SlideType;
   text: string;
+  description: string; // وصف أطول تحت السؤال (اختياري)
   imageUrl: string;
+  optionImages: string[]; // صورة لكل اختيار (نفس ترتيب options)
   // choice / truefalse: الاختيارات. order: العناصر بالترتيب الصح. short: فاضية
   options: string[];
   // choice / truefalse: أرقام الإجابات الصح
@@ -44,8 +46,10 @@ export interface PublicQuestion {
   type: QuestionType;
   number: number; // رقم السؤال (من غير سلايدات الترتيب)
   text: string;
+  description: string;
   imageUrl: string;
   options: string[];
+  optionImages: string[];
   timeLimit: number;
   points: number;
   multi: boolean;

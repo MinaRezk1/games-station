@@ -211,7 +211,10 @@ export default function Host() {
               <b>{answerCount}</b> / {players.length} جاوبوا
             </span>
           </div>
-          <h2 className="host-q-text">{q.text}</h2>
+          <div className="host-q-head">
+            <h2 className="host-q-text">{q.text}</h2>
+            {q.description && <p className="host-q-desc">{q.description}</p>}
+          </div>
           <div className="host-q-body">
             <QuestionImage src={q.imageUrl} />
             <QuestionDisplay question={q} />
@@ -243,7 +246,10 @@ export default function Host() {
             <b>{r.correctCount}</b> من {r.answerCount} جاوبوا صح
           </span>
         </div>
-        <h2 className="host-q-text">{q.text}</h2>
+        <div className="host-q-head">
+          <h2 className="host-q-text">{q.text}</h2>
+          {q.description && <p className="host-q-desc">{q.description}</p>}
+        </div>
         <div className="host-q-body">
           <QuestionImage src={q.imageUrl} />
           <RevealDisplay question={q} reveal={r} />
@@ -346,7 +352,7 @@ function QuestionDisplay({ question }: { question: PublicQuestion }) {
       {question.multi && <p className="host-order-hint">فيه أكتر من إجابة صح</p>}
       <div className={`options host-options count-${question.options.length}`}>
         {question.options.map((opt, i) => (
-          <OptionTile key={i} index={i} text={opt} />
+          <OptionTile key={i} index={i} text={opt} image={question.optionImages?.[i] || undefined} />
         ))}
       </div>
     </div>
@@ -402,6 +408,7 @@ function RevealDisplay({ question, reveal }: { question: PublicQuestion; reveal:
           key={i}
           index={i}
           text={opt}
+          image={question.optionImages?.[i] || undefined}
           count={reveal.counts[i] ?? 0}
           total={total}
           state={reveal.correct.includes(i) ? 'correct' : 'dim'}

@@ -416,8 +416,11 @@ button.opt:not(:disabled):active { transform: scale(0.98); }
 .save-state.is-error { color: var(--bad); font-weight: 700; }
 .editor-problem { margin: 0.6rem 1rem 0; align-self: flex-start; }
 
-.editor-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 220px minmax(0, 1fr) 370px; }
-.slide-list { border-inline-end: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.editor-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 380px minmax(0, 1fr) 220px; }
+.editor-body > .panel { order: 1; }
+.editor-body > .editor-stage { order: 2; }
+.editor-body > .slide-list { order: 3; }
+.slide-list { border-inline-start: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .slide-add { position: relative; padding: 0.75rem; border-bottom: 1px solid var(--line); }
 .add-menu {
   position: absolute; z-index: 10; top: calc(100% - 0.4rem); inset-inline: 0.75rem;
@@ -479,7 +482,7 @@ button.opt:not(:disabled):active { transform: scale(0.98); }
 .slide-board li:first-child { background: var(--gold); color: var(--gold-ink); }
 .slide-board li i { flex: 1; height: 1.2cqi; border-radius: 999px; background: currentColor; opacity: 0.2; }
 
-.panel { border-inline-start: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
+.panel { border-inline-end: 1px solid var(--line); background: var(--surface); display: flex; flex-direction: column; min-height: 0; }
 .panel-tabs { display: flex; border-bottom: 1px solid var(--line); }
 .panel-tabs button { flex: 1; padding: 0.8rem; border: 0; background: none; font-weight: 700; color: var(--muted); border-bottom: 3px solid transparent; }
 .panel-tabs button.is-on { color: var(--brand); border-bottom-color: var(--brand); }
@@ -523,14 +526,37 @@ button.opt:not(:disabled):active { transform: scale(0.98); }
 .theme-swatch.is-on { outline: 3px solid var(--brand); outline-offset: 2px; }
 .theme-swatch.theme-custom { background: repeating-linear-gradient(45deg, #1c2340 0 8px, #11162b 8px 16px); }
 
+/* ===== الوصف وصور الاختيارات ===== */
+.slide-q-head { display: flex; flex-direction: column; gap: 0.8cqi; background: var(--surface); border-radius: 1.6cqi; padding: 1.6cqi 2cqi; }
+.slide-q-head .slide-q-text { background: none; padding: 0; }
+.slide-q-desc { text-align: center; font-size: 1.7cqi; color: var(--muted); line-height: 1.5; }
+.host-q-head { display: flex; flex-direction: column; gap: 0.6rem; background: var(--surface); border-radius: 18px; padding: clamp(1rem, 2.5vw, 2rem); }
+.host-q-head .host-q-text { background: none; padding: 0; }
+.host-q-desc { text-align: center; font-size: clamp(1rem, 1.8vw, 1.4rem); color: var(--muted); line-height: 1.5; }
+.player-q-desc { color: var(--muted); font-size: 0.95rem; margin-top: -0.4rem; }
+.opt.has-img .opt-text { display: flex; flex-direction: column; gap: 0.4rem; }
+.opt-big.has-img .opt-text { align-items: center; }
+.opt-img { max-width: 100%; max-height: 7rem; object-fit: contain; border-radius: 8px; background: rgba(255, 255, 255, 0.9); align-self: flex-start; }
+.opt-big .opt-img { align-self: center; max-height: 5rem; }
+.slide-options .opt-img { max-height: 8cqi; border-radius: 0.6cqi; }
+.opt-row { flex-wrap: wrap; }
+.opt-img-input { flex-basis: 100% !important; font-size: 0.85rem; }
+.opt-row-tools button.has-img { background: var(--brand-soft); color: var(--brand); }
+.time-input { display: flex; align-items: center; gap: 0.4rem; font-weight: 400; color: var(--muted); font-size: 0.9rem; }
+.time-input input { width: 5.5rem; background: var(--surface); border: 1.5px solid var(--line); border-radius: 10px; padding: 0.45rem 0.6rem; text-align: center; }
+.time-input input:focus { border-color: var(--brand); outline: none; }
+
 /* ===== الشاشات الصغيرة ===== */
 @media (max-width: 1000px) {
   .editor { height: auto; min-height: 100dvh; }
   .editor-body { grid-template-columns: 1fr; }
-  .slide-list { border-inline-end: 0; border-bottom: 1px solid var(--line); }
+  .editor-body > .slide-list { order: 1; }
+  .editor-body > .editor-stage { order: 2; }
+  .editor-body > .panel { order: 3; }
+  .slide-list { border-inline-start: 0; border-bottom: 1px solid var(--line); }
   .thumbs { flex-direction: row; overflow-x: auto; }
   .thumbs li { flex: 0 0 150px; }
-  .panel { border-inline-start: 0; border-top: 1px solid var(--line); }
+  .panel { border-inline-end: 0; border-top: 1px solid var(--line); }
   .editor-stage { padding: 1rem; }
 }
 

@@ -4,6 +4,9 @@ export const TIME_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
 export const MAX_OPTIONS = 6;
 export const MAX_ACCEPTED = 5;
 export const MAX_POINTS = 5000;
+export const MIN_TIME = 5;
+export const MAX_TIME = 300;
+export const isHttps = (u: string) => /^https:\/\//i.test(u.trim());
 
 export const TYPE_LABELS: Record<SlideType, string> = {
   choice: 'اختيار من متعدد',
@@ -60,7 +63,9 @@ export function newQuestion(type: SlideType = 'choice'): Question {
   const base = {
     type,
     text: '',
+    description: '',
     imageUrl: '',
+    optionImages: [] as string[],
     timeLimit: 20,
     points: 1000,
     minPoints: 500,
@@ -88,6 +93,7 @@ export function changeType(q: Question, type: SlideType): Question {
   if (type === 'leaderboard') return fresh;
   const kept = {
     text: q.text,
+    description: q.description,
     imageUrl: q.imageUrl,
     points: q.points,
     minPoints: q.minPoints,
@@ -98,6 +104,7 @@ export function changeType(q: Question, type: SlideType): Question {
     ...fresh,
     ...kept,
     options: keepOptions && q.options.length >= 2 ? [...q.options] : fresh.options,
+    optionImages: type === 'choice' && q.type === 'choice' ? [...q.optionImages] : [],
     correct: type === 'choice' ? [0] : fresh.correct,
   };
 }
@@ -117,10 +124,13 @@ export function normalizeQuestion(raw: unknown): Question {
       : [];
   const points = Number(r.points) || 1000;
   const minPoints = typeof r.minPoints === 'number' ? r.minPoints : Math.round(points / 2);
+  const images = Array.isArray(r.optionImages) ? r.optionImages.map((o) => String(o ?? '')) : [];
   return {
     type,
     text: String(r.text ?? ''),
+    description: String(r.description ?? ''),
     imageUrl: String(r.imageUrl ?? ''),
+    optionImages: type === 'choice' ? options.map((_, i) => images[i] ?? '') : [],
     options: type === 'truefalse' ? ['صح', 'غلط'] : options,
     correct,
     accepted: Array.isArray(r.accepted) ? r.accepted.map((a) => String(a)) : [],
@@ -164,7 +174,9 @@ export function normalizeQuiz(id: string, raw: Record<string, unknown>): Quiz {
 export function validateQuestion(q: Question, n: number): string | null {
   if (q.type === 'leaderboard') return null;
   if (!q.text.trim()) return `سؤال ${n} مالوش نص.`;
-  if (q.imageUrl.trim() && !/^https:\/\//i.test(q.imageUrl.trim())) return `لينك الصورة في سؤال ${n} لازم يبدأ بـ https://`;
+  if (q.imageUrl.trim() && !isHttps(q.imageUrl)) return `لينك الصورة في سؤال ${n} لازم يبدأ بـ https://`;
+  if (q.optionImages.some((u) => u.trim() && !isHttps(u))) return `لينك صورة اختيار في سؤال ${n} لازم يبدأ بـ https://`;
+  if (q.timeLimit < MIN_TIME || q.timeLimit > MAX_TIME) return `وقت سؤال ${n} لازم يبقى من ${MIN_TIME} لـ ${MAX_TIME} ثانية.`;
   if (q.minPoints > q.points) return `في سؤال ${n}، أقل نقط أكبر من أقصى نقط.`;
   switch (q.type) {
     case 'choice':
@@ -204,7 +216,10 @@ export function cleanQuestion(q: Question): Question {
   return {
     ...q,
     text: q.text.trim(),
+    description: q.description.trim(),
     imageUrl: q.imageUrl.trim(),
+    optionImages: q.type === 'choice' ? q.options.map((_, i) => (q.optionImages[i] ?? '').trim()) : [],
+    timeLimit: Math.min(MAX_TIME, Math.max(MIN_TIME, Math.round(q.timeLimit) || 20)),
     options: q.type === 'truefalse' ? ['صح', 'غلط'] : q.type === 'short' ? [] : q.options.map((o) => o.trim()),
     correct:
       q.type === 'choice' || q.type === 'truefalse'

@@ -14,12 +14,13 @@ import {
   MAX_ACCEPTED,
   MAX_OPTIONS,
   MAX_POINTS,
+  MAX_TIME,
+  MIN_TIME,
   newQuestion,
   normalizeQuiz,
   questionNumber,
   SLIDE_TYPES,
   THEMES,
-  TIME_OPTIONS,
   TYPE_HINTS,
   TYPE_ICONS,
   TYPE_LABELS,
@@ -47,6 +48,7 @@ export default function QuizEditor() {
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [problem, setProblem] = useState('');
   const [launching, setLaunching] = useState(false);
+  const [imgOpen, setImgOpen] = useState<number | null>(null);
   const savedVersion = useRef(0);
 
   const isAdmin = !!user && !user.isAnonymous && isAdminEmail(user.email);
@@ -152,7 +154,7 @@ export default function QuizEditor() {
   }
 
   function duplicateSlide() {
-    setSlidesAnd((s) => [...s.slice(0, sel + 1), { ...s[sel], options: [...s[sel].options], correct: [...s[sel].correct], accepted: [...s[sel].accepted] }, ...s.slice(sel + 1)]);
+    setSlidesAnd((s) => [...s.slice(0, sel + 1), { ...s[sel], options: [...s[sel].options], correct: [...s[sel].correct], accepted: [...s[sel].accepted], optionImages: [...s[sel].optionImages] }, ...s.slice(sel + 1)]);
     setSelected(sel + 1);
   }
 
@@ -172,15 +174,27 @@ export default function QuizEditor() {
     if (j < 0 || j >= current.options.length) return;
     const options = [...current.options];
     [options[oi], options[j]] = [options[j], options[oi]];
+    const optionImages = current.options.map((_, k) => current.optionImages[k] ?? '');
+    [optionImages[oi], optionImages[j]] = [optionImages[j], optionImages[oi]];
     const correct = current.correct.map((c) => (c === oi ? j : c === j ? oi : c));
-    editCurrent({ options, correct });
+    editCurrent({ options, correct, optionImages: current.type === 'choice' ? optionImages : [] });
   }
 
   function removeOption(oi: number) {
     if (current.options.length <= 2) return;
     const options = current.options.filter((_, k) => k !== oi);
+    const optionImages = current.options.map((_, k) => current.optionImages[k] ?? '').filter((_, k) => k !== oi);
     const correct = current.correct.filter((c) => c !== oi).map((c) => (c > oi ? c - 1 : c));
-    editCurrent({ options, correct: current.type === 'choice' && correct.length === 0 ? [0] : correct });
+    editCurrent({
+      options,
+      optionImages: current.type === 'choice' ? optionImages : [],
+      correct: current.type === 'choice' && correct.length === 0 ? [0] : correct,
+    });
+    setImgOpen(null);
+  }
+
+  function setOptionImage(oi: number, url: string) {
+    editCurrent({ optionImages: current.options.map((_, k) => (k === oi ? url : current.optionImages[k] ?? '')) });
   }
 
   function toggleCorrect(oi: number) {
@@ -289,6 +303,7 @@ export default function QuizEditor() {
                   onClick={() => {
                     setSelected(i);
                     setTab('slide');
+                    setImgOpen(null);
                   }}
                 >
                   <span className="thumb-type">
@@ -399,6 +414,19 @@ export default function QuizEditor() {
                   </label>
 
                   <label className="panel-field">
+                    <span>
+                      وصف أطول (اختياري) <small className="muted">{current.description.length}/500</small>
+                    </span>
+                    <textarea
+                      rows={2}
+                      maxLength={500}
+                      value={current.description}
+                      placeholder="كلام توضيحي يظهر تحت السؤال"
+                      onChange={(e) => editCurrent({ description: e.target.value })}
+                    />
+                  </label>
+
+                  <label className="panel-field">
                     <span>صورة (اختياري)</span>
                     <input
                       dir="ltr"
@@ -433,6 +461,15 @@ export default function QuizEditor() {
                           )}
                           {current.type === 'choice' && (
                             <span className="opt-row-tools">
+                              <button
+                                onClick={() => setImgOpen(imgOpen === oi ? null : oi)}
+                                className={current.optionImages[oi] ? 'has-img' : ''}
+                                aria-label="صورة للاختيار"
+                                aria-expanded={imgOpen === oi}
+                                title="صورة للاختيار"
+                              >
+                                🖼
+                              </button>
                               <button onClick={() => moveOption(oi, -1)} disabled={oi === 0} aria-label="لفوق">
                                 ↑
                               </button>
@@ -440,6 +477,16 @@ export default function QuizEditor() {
                                 ✕
                               </button>
                             </span>
+                          )}
+                          {current.type === 'choice' && imgOpen === oi && (
+                            <input
+                              className="opt-img-input"
+                              dir="ltr"
+                              autoFocus
+                              placeholder="لينك صورة الاختيار https://..."
+                              value={current.optionImages[oi] ?? ''}
+                              onChange={(e) => setOptionImage(oi, e.target.value)}
+                            />
                           )}
                         </div>
                       ))}
@@ -543,13 +590,16 @@ export default function QuizEditor() {
                   <div className="panel-section">
                     <label className="panel-field panel-inline">
                       <span>الوقت</span>
-                      <select value={current.timeLimit} onChange={(e) => editCurrent({ timeLimit: Number(e.target.value) })}>
-                        {TIME_OPTIONS.map((t) => (
-                          <option key={t} value={t}>
-                            {t} ثانية
-                          </option>
-                        ))}
-                      </select>
+                      <span className="time-input">
+                        <input
+                          type="number"
+                          min={MIN_TIME}
+                          max={MAX_TIME}
+                          value={current.timeLimit}
+                          onChange={(e) => editCurrent({ timeLimit: Number(e.target.value) })}
+                        />
+                        ثانية
+                      </span>
                     </label>
                     {current.type === 'choice' && (
                       <Toggle

@@ -5,14 +5,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import { db, isAdminEmail } from '../firebase';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { friendlyError } from '../lib/errors';
-import { normalizeQuiz } from '../lib/quiz';
+import { normalizeQuiz, themeStyle } from '../lib/quiz';
 import {
   endGame,
+  goToSlide,
   GRACE_MS,
   joinUrl,
   revealQuestion,
-  showLeaderboard,
-  startQuestion,
   syncServerClock,
 } from '../lib/game';
 import { OptionTile } from '../components/OptionTile';
@@ -144,11 +143,12 @@ export default function Host() {
     );
   if (!isOwner) return <Navigate to="/admin" replace />;
 
-  const total = quiz.questions.length;
-  const isLast = room.currentIndex + 1 >= total;
-  const goNext = () =>
-    isLast ? run(() => endGame(roomRef)) : run(() => startQuestion(roomRef, quiz, room.currentIndex + 1, offset));
-  const nextLabel = isLast ? 'النتيجة النهائية' : 'السؤال الجاي';
+  const total = room.totalQuestions;
+  const nextSlide = quiz.questions[room.currentIndex + 1];
+  const goNext = () => run(() => goToSlide(roomRef, quiz, room.currentIndex + 1, offset));
+  const nextLabel = !nextSlide ? 'النتيجة النهائية' : nextSlide.type === 'leaderboard' ? 'الترتيب' : 'السؤال الجاي';
+  const themeClass = `theme-${quiz.settings.theme}`;
+  const bgStyle = themeStyle(quiz.settings);
 
   let body: ReactNode;
 
@@ -182,7 +182,7 @@ export default function Host() {
           </ul>
           <button
             className="btn btn-brand btn-huge"
-            onClick={() => run(() => startQuestion(roomRef, quiz, 0, offset))}
+            onClick={() => run(() => goToSlide(roomRef, quiz, 0, offset))}
             disabled={busy || !clockReady || players.length === 0}
           >
             ابدأ المسابقة
@@ -196,7 +196,7 @@ export default function Host() {
       leadLeft > 0 ? (
         <section className="host-countdown">
           <p className="q-num">
-            سؤال {room.currentIndex + 1} من {total}
+            سؤال {q.number} من {total}
           </p>
           <Countdown leftMs={leadLeft} text={q.text} />
         </section>
@@ -204,7 +204,7 @@ export default function Host() {
         <section className="host-question">
           <div className="host-q-top">
             <span className="q-num">
-              سؤال {room.currentIndex + 1} من {total}
+              سؤال {q.number} من {total}
             </span>
             <Timer remainingMs={remainingMs} totalMs={q.timeLimit * 1000} />
             <span className="answered">
@@ -237,7 +237,7 @@ export default function Host() {
       <section className="host-question">
         <div className="host-q-top">
           <span className="q-num">
-            سؤال {room.currentIndex + 1} من {total}
+            سؤال {q.number} من {total}
           </span>
           <span className="answered">
             <b>{r.correctCount}</b> من {r.answerCount} جاوبوا صح
@@ -249,22 +249,16 @@ export default function Host() {
           <RevealDisplay question={q} reveal={r} />
         </div>
         <div className="host-actions">
-          {quiz.settings.showLeaderboard ? (
-            <button className="btn btn-brand" disabled={busy} onClick={() => run(() => showLeaderboard(roomRef))}>
-              الترتيب
-            </button>
-          ) : (
-            <button className="btn btn-brand" disabled={busy || !clockReady} onClick={goNext}>
-              {nextLabel}
-            </button>
-          )}
+          <button className="btn btn-brand" disabled={busy || !clockReady} onClick={goNext}>
+            {nextLabel}
+          </button>
         </div>
       </section>
     );
   } else if (room.status === 'leaderboard') {
     body = (
       <section className="host-board">
-        <h2 className="section-title">الترتيب بعد سؤال {room.currentIndex + 1}</h2>
+        <h2 className="section-title">الترتيب</h2>
         <Leaderboard players={players} />
         <div className="host-actions">
           <button className="btn btn-brand" disabled={busy || !clockReady} onClick={goNext}>
@@ -303,7 +297,7 @@ export default function Host() {
   }
 
   return (
-    <main className="host">
+    <main className={`host ${themeClass}`} style={bgStyle}>
       <header className="host-bar">
         <span className="brand-small">Games Station</span>
         <span className="host-title">{room.title}</span>

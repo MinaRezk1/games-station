@@ -156,7 +156,7 @@ export default function Play() {
         <div className="player-question">
           <div className="player-q-head">
             <span className="q-num">
-              سؤال {qIndex + 1} من {room.totalQuestions}
+              سؤال {q.number ?? qIndex + 1} من {room.totalQuestions}
             </span>
             <Timer remainingMs={remainingMs} totalMs={q.timeLimit * 1000} />
           </div>

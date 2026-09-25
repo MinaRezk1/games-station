@@ -15,19 +15,25 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { normalizeAnswer } from './text';
-import type { Quiz, RevealData, Room } from '../types';
+import { countQuestions, questionNumber } from './quiz';
+import type { QuestionType, Quiz, RevealData, Room } from '../types';
 
 // وقت إضافي صغير عشان النت البطيء
 export const GRACE_MS = 1500;
 // العد التنازلي قبل كل سؤال (الموبايلات بتستلم السؤال فيه)
 export const LEAD_MS = 4000;
 
-// لو النقط على حسب السرعة: أقصى نقط لو جاوب فوراً، ونصها لو جاوب في آخر ثانية
-export function calcPoints(elapsedMs: number, limitMs: number, maxPoints: number, speedBonus: boolean): number {
-  if (!speedBonus) return maxPoints;
-  if (limitMs <= 0) return maxPoints;
+// لو النقط على حسب السرعة: أقصى نقط لو جاوب فوراً، وبتقل لحد أقل نقط لو جاوب في آخر ثانية
+export function calcPoints(
+  elapsedMs: number,
+  limitMs: number,
+  maxPoints: number,
+  minPoints: number,
+  speedBonus: boolean,
+): number {
+  if (!speedBonus || limitMs <= 0) return maxPoints;
   const ratio = Math.min(1, Math.max(0, elapsedMs / limitMs));
-  return Math.round(maxPoints * (1 - ratio / 2));
+  return Math.round(maxPoints - (maxPoints - Math.min(minPoints, maxPoints)) * ratio);
 }
 
 export function joinUrl(code: string): string {
@@ -47,7 +53,7 @@ export async function createRoom(quiz: Quiz, uid: string): Promise<string> {
         title: quiz.title,
         status: 'lobby',
         currentIndex: -1,
-        totalQuestions: quiz.questions.length,
+        totalQuestions: countQuestions(quiz.questions),
         question: null,
         questionStartedAt: null,
         questionEndsAt: null,
@@ -105,7 +111,8 @@ export async function startQuestion(
     status: 'question',
     currentIndex: index,
     question: {
-      type: q.type,
+      type: q.type as QuestionType,
+      number: questionNumber(quiz.questions, index),
       text: q.text,
       imageUrl: q.imageUrl,
       options: perm.map((i) => q.options[i]),
@@ -213,7 +220,7 @@ export async function revealQuestion(roomRef: DocumentReference, quiz: Quiz): Pr
       const correct = !!r?.correct;
       const prevStreak = (p.get('streak') as number | undefined) ?? 0;
       const streak = correct ? prevStreak + 1 : 0;
-      const base = correct ? calcPoints(r!.at - startedMs, limitMs, q.points, q.speedBonus) : 0;
+      const base = correct ? calcPoints(r!.at - startedMs, limitMs, q.points, q.minPoints, q.speedBonus) : 0;
       const bonus = correct && quiz.settings.streakBonus && streak > 1 ? Math.min(500, 100 * (streak - 1)) : 0;
       batch.update(p.ref, {
         score: increment(base + bonus),
@@ -229,8 +236,20 @@ export async function revealQuestion(roomRef: DocumentReference, quiz: Quiz): Pr
   }
 }
 
-export async function showLeaderboard(roomRef: DocumentReference): Promise<void> {
-  await updateDoc(roomRef, { status: 'leaderboard' });
+// بيروح للسلايد رقم index: سؤال أو ترتيب، ولو خلصوا بينهي المسابقة
+export async function goToSlide(
+  roomRef: DocumentReference,
+  quiz: Quiz,
+  index: number,
+  clockOffset: number,
+): Promise<void> {
+  const slide = quiz.questions[index];
+  if (!slide) return endGame(roomRef);
+  if (slide.type === 'leaderboard') {
+    await updateDoc(roomRef, { status: 'leaderboard', currentIndex: index });
+    return;
+  }
+  await startQuestion(roomRef, quiz, index, clockOffset);
 }
 
 export async function endGame(roomRef: DocumentReference): Promise<void> {

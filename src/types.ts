@@ -1,9 +1,12 @@
 import type { Timestamp } from 'firebase/firestore';
 
 export type QuestionType = 'choice' | 'truefalse' | 'short' | 'order';
+export type SlideType = QuestionType | 'leaderboard';
+export type ThemeId = 'classic' | 'midnight' | 'sunrise' | 'garden' | 'ruby' | 'custom';
 
+// كل سلايد في المسابقة: سؤال أو سلايد ترتيب
 export interface Question {
-  type: QuestionType;
+  type: SlideType;
   text: string;
   imageUrl: string;
   // choice / truefalse: الاختيارات. order: العناصر بالترتيب الصح. short: فاضية
@@ -14,13 +17,15 @@ export interface Question {
   accepted: string[];
   timeLimit: number; // بالثواني
   points: number; // أقصى نقط للسؤال
+  minPoints: number; // أقل نقط لو جاوب صح في آخر ثانية
   speedBonus: boolean; // النقط بتقل مع الوقت
   shuffle: boolean; // خلط ترتيب الاختيارات
 }
 
 export interface QuizSettings {
   streakBonus: boolean;
-  showLeaderboard: boolean;
+  theme: ThemeId;
+  backgroundUrl: string;
 }
 
 export interface Quiz {
@@ -37,6 +42,7 @@ export type RoomStatus = 'lobby' | 'question' | 'reveal' | 'leaderboard' | 'ende
 // السؤال زي ما اللاعبين بيشوفوه: من غير الإجابة الصح، والاختيارات بترتيب العرض
 export interface PublicQuestion {
   type: QuestionType;
+  number: number; // رقم السؤال (من غير سلايدات الترتيب)
   text: string;
   imageUrl: string;
   options: string[];

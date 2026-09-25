@@ -15,7 +15,7 @@ import { auth, db, googleProvider, isAdminEmail } from '../firebase';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { friendlyError } from '../lib/errors';
 import { createRoom } from '../lib/game';
-import { DEFAULT_SETTINGS, normalizeQuiz, validateQuestion } from '../lib/quiz';
+import { countQuestions, DEFAULT_SETTINGS, newQuestion, normalizeQuiz, validateQuiz } from '../lib/quiz';
 import type { Quiz } from '../types';
 
 export default function Admin() {
@@ -56,8 +56,8 @@ export default function Admin() {
       const ref = await addDoc(collection(db, 'quizzes'), {
         ownerId: user.uid,
         title: 'مسابقة جديدة',
-        questions: [],
-        settings: DEFAULT_SETTINGS,
+        settings: { ...DEFAULT_SETTINGS, v: 3 },
+        questions: [newQuestion('choice')],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -80,11 +80,8 @@ export default function Admin() {
 
   async function goLive(quiz: Quiz) {
     if (!user) return;
-    if (quiz.questions.length === 0) return setError('ضيف أسئلة للمسابقة الأول.');
-    for (let i = 0; i < quiz.questions.length; i++) {
-      const problem = validateQuestion(quiz.questions[i], i + 1);
-      if (problem) return setError(`${quiz.title}: ${problem}`);
-    }
+    const problem = validateQuiz(quiz.questions);
+    if (problem) return setError(`${quiz.title}: ${problem.message}`);
     setBusyId(quiz.id);
     try {
       const code = await createRoom(quiz, user.uid);
@@ -156,7 +153,7 @@ export default function Admin() {
             <li key={q.id} className="quiz-row">
               <div>
                 <h2>{q.title}</h2>
-                <p className="muted">{q.questions.length} سؤال</p>
+                <p className="muted">{countQuestions(q.questions)} سؤال</p>
               </div>
               <div className="row">
                 <button className="btn btn-brand" onClick={() => goLive(q)} disabled={busyId === q.id}>

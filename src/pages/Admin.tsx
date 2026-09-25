@@ -15,7 +15,7 @@ import { auth, db, googleProvider, isAdminEmail } from '../firebase';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { friendlyError } from '../lib/errors';
 import { createRoom } from '../lib/game';
-import { countQuestions, DEFAULT_SETTINGS, newQuestion, normalizeQuiz, QUESTION_TYPES, TYPE_HINTS, TYPE_ICONS, TYPE_LABELS, validateQuiz } from '../lib/quiz';
+import { countQuestions, DEFAULT_SETTINGS, newQuestion, normalizeQuiz, QUESTION_TYPES, TYPE_HINTS, TYPE_ICONS, TYPE_LABELS, validateQuiz, validateSettings } from '../lib/quiz';
 import type { QuestionType } from '../types';
 import type { Quiz } from '../types';
 
@@ -83,6 +83,8 @@ export default function Admin() {
 
   async function goLive(quiz: Quiz) {
     if (!user) return;
+    const settingsProblem = validateSettings(quiz.settings);
+    if (settingsProblem) return setError(`${quiz.title}: ${settingsProblem}`);
     const problem = validateQuiz(quiz.questions);
     if (problem) return setError(`${quiz.title}: ${problem.message}`);
     setBusyId(quiz.id);

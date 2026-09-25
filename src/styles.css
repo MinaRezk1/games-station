@@ -621,6 +621,80 @@ button.opt:not(:disabled):active { transform: scale(0.98); }
 .type-card small { color: var(--muted); line-height: 1.5; }
 .type-card-icon { width: 2.4rem; height: 2.4rem; border-radius: 10px; background: var(--brand); color: #fff; display: grid; place-items: center; }
 
+/* ===== الرسم البياني بالأعمدة ===== */
+.bars { flex: 1; min-height: 16rem; display: flex; flex-direction: column; width: min(100%, 1100px); align-self: center; }
+.bars-plot { flex: 1; display: flex; align-items: flex-end; gap: clamp(0.75rem, 3vw, 3rem); padding: 0 1rem; border-bottom: 2px solid var(--line); min-height: 10rem; }
+.bars-labels { display: flex; gap: clamp(0.75rem, 3vw, 3rem); padding: 0.75rem 1rem 0; }
+.bar-col { flex: 1; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 0.4rem; transition: opacity 0.4s ease; }
+.bar-value { font-family: var(--display); font-size: clamp(1.4rem, 2.6vw, 2.4rem); line-height: 1; }
+.bar { width: min(70%, 9rem); border-radius: 10px 10px 0 0; transition: height 1s cubic-bezier(0.2, 0.7, 0.2, 1); }
+.bar-0 { background: var(--opt0); }
+.bar-1 { background: var(--opt1); }
+.bar-2 { background: var(--opt2); }
+.bar-3 { background: var(--opt3); }
+.bar-4 { background: var(--opt4); }
+.bar-5 { background: var(--opt5); }
+.bar-label { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 0.4rem; text-align: center; transition: opacity 0.4s ease; }
+.bar-label img { max-width: 100%; max-height: 6rem; object-fit: contain; border-radius: 8px; background: #fff; }
+.bar-label-text { display: inline-flex; align-items: center; gap: 0.45rem; flex-wrap: wrap; justify-content: center; font-weight: 700; font-size: clamp(1rem, 2vw, 1.6rem); line-height: 1.3; }
+.bar-shape { width: 1.6em; height: 1.6em; border-radius: 0.35em; display: inline-grid; place-items: center; color: #fff; font-size: 0.7em; flex: none; }
+.bar-shape-0 { background: var(--opt0); }
+.bar-shape-1 { background: var(--opt1); }
+.bar-shape-2 { background: var(--opt2); color: var(--gold-ink); }
+.bar-shape-3 { background: var(--opt3); }
+.bar-shape-4 { background: var(--opt4); }
+.bar-shape-5 { background: var(--opt5); }
+.bar-check { width: 1.4em; height: 1.4em; border-radius: 50%; background: var(--ok); color: #fff; display: inline-grid; place-items: center; font-size: 0.75em; }
+.bars .is-dim { opacity: 0.35; }
+.host-q-head { background: none !important; padding: 0.5rem 0 !important; align-items: center; }
+.host-q-head .host-q-text { font-size: clamp(1.8rem, 3.8vw, 3.2rem); }
+.join-strip { flex: 1; text-align: center; color: var(--muted); font-size: 0.95rem; }
+.join-strip b { color: var(--ink); }
+
+.slide-chart { flex: 1; min-height: 0; display: flex; }
+.slide-chart .bars { min-height: 0; }
+.slide-chart .bars-plot { min-height: 0; gap: 2cqi; padding: 0 1cqi; border-bottom-width: 0.2cqi; }
+.slide-chart .bars-labels { gap: 2cqi; padding: 0.8cqi 1cqi 0; }
+.slide-chart .bar { width: 60%; border-radius: 0.8cqi 0.8cqi 0 0; }
+.slide-chart .bar-label-text { font-size: 1.7cqi; }
+.slide-chart .bar-label img { max-height: 7cqi; }
+.slide-q-head { background: none !important; padding: 0 !important; }
+
+/* ===== دابل ===== */
+.double-badge {
+  align-self: center;
+  display: inline-block; padding: 0.25rem 0.9rem; border-radius: 999px;
+  background: var(--gold); color: var(--gold-ink); font-weight: 700; font-size: 0.95rem;
+}
+.double-badge.is-big { font-size: 1.3rem; padding: 0.4rem 1.2rem; animation: double-pulse 1s ease-in-out infinite alternate; }
+@keyframes double-pulse { from { transform: scale(1); } to { transform: scale(1.08); } }
+.slide-q .double-badge { font-size: 1.4cqi; padding: 0.3cqi 1.2cqi; }
+
+/* ===== الفرق ===== */
+.team-board { list-style: none; margin: 0; padding: 0; width: min(100%, 760px); display: flex; flex-direction: column; gap: 0.7rem; }
+.team-row { display: flex; align-items: center; gap: 1rem; background: var(--surface); border-radius: 16px; padding: 0.9rem 1.2rem; font-size: clamp(1.1rem, 2vw, 1.5rem); }
+.team-row.is-first { background: var(--gold); color: var(--gold-ink); }
+.team-info { flex: 1; display: flex; flex-direction: column; gap: 0.2rem; }
+.team-info small { font-size: 0.6em; opacity: 0.75; }
+.team-bar { height: 0.55rem; border-radius: 999px; background: rgba(127, 127, 127, 0.2); overflow: hidden; }
+.team-bar span { display: block; height: 100%; background: currentColor; border-radius: inherit; transition: width 1s ease; }
+.board-sub { color: var(--muted); font-weight: 700; }
+.winner-team { font-size: clamp(1.3rem, 2.6vw, 2rem); }
+.lobby-teams { display: flex; gap: 0.6rem; flex-wrap: wrap; }
+.lobby-teams span { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0.3rem 0.8rem; }
+.chips small { color: var(--muted); }
+.team-pick { display: flex; flex-direction: column; gap: 0.6rem; }
+.team-pick p { font-weight: 700; text-align: center; }
+.team-btn { color: #fff; }
+.team-btn-0, .team-dot-0 { background: var(--opt1) !important; color: #fff !important; }
+.team-btn-1, .team-dot-1 { background: var(--opt5) !important; color: #fff !important; }
+.team-btn-2, .team-dot-2 { background: var(--opt3) !important; color: #fff !important; }
+.team-btn-3, .team-dot-3 { background: var(--opt2) !important; color: var(--gold-ink) !important; }
+.team-btn-4, .team-dot-4 { background: var(--opt4) !important; color: #fff !important; }
+.team-btn-5, .team-dot-5 { background: var(--opt0) !important; color: #fff !important; }
+.team-line { font-size: 1.05rem; }
+.player-team { opacity: 0.85; }
+.teams-edit { display: flex; flex-direction: column; gap: 0.45rem; padding-inline-start: 1.7rem; }
 /* ===== الشاشات الصغيرة ===== */
 @media (max-width: 1000px) {
   .editor { height: auto; min-height: 100dvh; }

@@ -56,7 +56,11 @@ service cloud.firestore {
         allow create: if signedIn()
           && request.auth.uid == uid
           && room(code).status != 'ended'
-          && request.resource.data.keys().hasOnly(['name', 'score', 'joinedAt'])
+          && request.resource.data.keys().hasOnly(['name', 'score', 'joinedAt', 'team'])
+          && (!('team' in request.resource.data)
+            || (request.resource.data.team is int
+              && request.resource.data.team >= 0
+              && request.resource.data.team < room(code).get('teams', []).size()))
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
           && request.resource.data.name.size() <= 30

@@ -14,11 +14,11 @@ import {
   revealQuestion,
   syncServerClock,
 } from '../lib/game';
-import { OptionTile } from '../components/OptionTile';
 import { Timer } from '../components/Timer';
 import { Countdown } from '../components/Countdown';
 import { QuestionImage } from '../components/QuestionImage';
-import { Leaderboard, sortPlayers } from '../components/Leaderboard';
+import { Leaderboard, sortPlayers, TeamBoard, teamStandings } from '../components/Leaderboard';
+import { BarChart } from '../components/BarChart';
 import type { Player, PublicQuestion, Quiz, Room } from '../types';
 
 export default function Host() {
@@ -148,6 +148,9 @@ export default function Host() {
   const goNext = () => run(() => goToSlide(roomRef, quiz, room.currentIndex + 1, offset));
   const nextLabel = !nextSlide ? 'النتيجة النهائية' : nextSlide.type === 'leaderboard' ? 'الترتيب' : 'السؤال الجاي';
   const themeClass = `theme-${quiz.settings.theme}`;
+  const teams = room.teams ?? [];
+  const teamMode = room.teamScoring ?? 'avg';
+  const shortUrl = joinUrl(code).replace(/^https?:\/\//, '').replace(/#\/join\/\d+$/, '');
   const bgStyle = themeStyle(quiz.settings);
 
   let body: ReactNode;
@@ -174,9 +177,21 @@ export default function Host() {
           <div className="lobby-count">
             <b>{players.length}</b> لاعب دخلوا
           </div>
+          {teams.length > 0 && (
+            <div className="lobby-teams">
+              {teams.map((t, i) => (
+                <span key={i}>
+                  {t}: <b>{players.filter((p) => p.team === i).length}</b>
+                </span>
+              ))}
+            </div>
+          )}
           <ul className="chips">
             {players.map((p) => (
-              <li key={p.id}>{p.name}</li>
+              <li key={p.id}>
+                {p.name}
+                {teams.length > 0 && p.team !== undefined && <small> · {teams[p.team]}</small>}
+              </li>
             ))}
             {players.length === 0 && <li className="chip-empty">مستنيين أول لاعب…</li>}
           </ul>
@@ -198,6 +213,7 @@ export default function Host() {
           <p className="q-num">
             سؤال {q.number} من {total}
           </p>
+          {q.double && <span className="double-badge is-big">نقط دابل ×2</span>}
           <Countdown leftMs={leadLeft} text={q.text} />
         </section>
       ) : (
@@ -212,6 +228,7 @@ export default function Host() {
             </span>
           </div>
           <div className="host-q-head">
+            {q.double && <span className="double-badge">نقط دابل ×2</span>}
             <h2 className="host-q-text">{q.text}</h2>
           </div>
           <div className="host-q-body">
@@ -246,6 +263,7 @@ export default function Host() {
           </span>
         </div>
         <div className="host-q-head">
+          {q.double && <span className="double-badge">نقط دابل ×2</span>}
           <h2 className="host-q-text">{q.text}</h2>
         </div>
         <div className="host-q-body">
@@ -262,8 +280,19 @@ export default function Host() {
   } else if (room.status === 'leaderboard') {
     body = (
       <section className="host-board">
-        <h2 className="section-title">الترتيب</h2>
-        <Leaderboard players={players} />
+        {teams.length > 0 ? (
+          <>
+            <h2 className="section-title">ترتيب الفرق</h2>
+            <TeamBoard standings={teamStandings(players, teams, teamMode)} mode={teamMode} />
+            <p className="board-sub">أحسن اللاعبين</p>
+            <Leaderboard players={players} limit={3} />
+          </>
+        ) : (
+          <>
+            <h2 className="section-title">الترتيب</h2>
+            <Leaderboard players={players} />
+          </>
+        )}
         <div className="host-actions">
           <button className="btn btn-brand" disabled={busy || !clockReady} onClick={goNext}>
             {nextLabel}
@@ -277,6 +306,15 @@ export default function Host() {
     body = (
       <section className="host-board">
         <h2 className="section-title">{room.title}</h2>
+        {teams.length > 0 && (
+          <>
+            <p className="winner-team">
+              الفريق الكسبان: <b>{teamStandings(players, teams, teamMode)[0]?.name}</b> 🎉
+            </p>
+            <TeamBoard standings={teamStandings(players, teams, teamMode)} mode={teamMode} />
+            <p className="board-sub">أحسن اللاعبين</p>
+          </>
+        )}
         <div className="podium">
           {podium.map((p, i) =>
             p ? (
@@ -304,7 +342,13 @@ export default function Host() {
     <main className={`host ${themeClass}`} style={bgStyle}>
       <header className="host-bar">
         <span className="brand-small">Games Station</span>
-        <span className="host-title">{room.title}</span>
+        {room.status === 'lobby' || room.status === 'ended' ? (
+          <span className="host-title">{room.title}</span>
+        ) : (
+          <span className="join-strip">
+            للدخول: <b dir="ltr">{shortUrl}</b> · الكود <b dir="ltr">{code}</b>
+          </span>
+        )}
         {room.status !== 'ended' && room.status !== 'lobby' && (
           <button
             className="btn-text"
@@ -348,11 +392,7 @@ function QuestionDisplay({ question }: { question: PublicQuestion }) {
   return (
     <div className="host-options-wrap">
       {question.multi && <p className="host-order-hint">فيه أكتر من إجابة صح</p>}
-      <div className={`options host-options count-${question.options.length}`}>
-        {question.options.map((opt, i) => (
-          <OptionTile key={i} index={i} text={opt} image={question.optionImages?.[i] || undefined} />
-        ))}
-      </div>
+      <BarChart options={question.options} images={question.optionImages} />
     </div>
   );
 }
@@ -398,20 +438,9 @@ function RevealDisplay({ question, reveal }: { question: PublicQuestion; reveal:
       </div>
     );
   }
-  const total = Math.max(1, reveal.answerCount);
   return (
-    <div className={`options host-options count-${question.options.length}`}>
-      {question.options.map((opt, i) => (
-        <OptionTile
-          key={i}
-          index={i}
-          text={opt}
-          image={question.optionImages?.[i] || undefined}
-          count={reveal.counts[i] ?? 0}
-          total={total}
-          state={reveal.correct.includes(i) ? 'correct' : 'dim'}
-        />
-      ))}
+    <div className="host-options-wrap">
+      <BarChart options={question.options} images={question.optionImages} counts={reveal.counts} correct={reveal.correct} />
     </div>
   );
 }

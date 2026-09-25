@@ -2,6 +2,7 @@ import type { Timestamp } from 'firebase/firestore';
 
 export type QuestionType = 'choice' | 'truefalse' | 'short' | 'order';
 export type SlideType = QuestionType | 'leaderboard';
+export type TeamScoring = 'sum' | 'avg';
 export type ThemeId = 'classic' | 'midnight' | 'sunrise' | 'garden' | 'ruby' | 'custom';
 
 // كل سلايد في المسابقة: سؤال أو سلايد ترتيب
@@ -21,12 +22,16 @@ export interface Question {
   points: number; // أقصى نقط للسؤال
   minPoints: number; // أقل نقط لو جاوب صح في آخر ثانية
   speedBonus: boolean; // النقط بتقل مع الوقت
+  double: boolean; // نقط دابل ×2
   shuffle: boolean; // خلط ترتيب الاختيارات
 }
 
 export interface QuizSettings {
   questionType: QuestionType; // نوع الأسئلة في المسابقة كلها
   streakBonus: boolean;
+  teamsEnabled: boolean;
+  teams: string[];
+  teamScoring: TeamScoring;
   theme: ThemeId;
   backgroundUrl: string;
 }
@@ -53,6 +58,7 @@ export interface PublicQuestion {
   optionImages: string[];
   timeLimit: number;
   points: number;
+  double: boolean;
   multi: boolean;
 }
 
@@ -76,6 +82,8 @@ export interface Room {
   questionStartedAt: Timestamp | null;
   questionEndsAt: Timestamp | null;
   reveal: RevealData | null;
+  teams?: string[];
+  teamScoring?: TeamScoring;
 }
 
 export interface Player {
@@ -87,4 +95,5 @@ export interface Player {
   lastCorrect?: boolean;
   lastQ?: number;
   streak?: number;
+  team?: number;
 }

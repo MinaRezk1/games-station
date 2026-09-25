@@ -7,7 +7,7 @@ import { OptionTile } from '../components/OptionTile';
 import { Timer } from '../components/Timer';
 import { Countdown } from '../components/Countdown';
 import { QuestionImage } from '../components/QuestionImage';
-import { sortPlayers } from '../components/Leaderboard';
+import { sortPlayers, teamStandings } from '../components/Leaderboard';
 import { GRACE_MS, syncServerClock } from '../lib/game';
 import type { Player, PublicQuestion, Room } from '../types';
 
@@ -101,6 +101,16 @@ export default function Play() {
   const remainingMs = endsMs - GRACE_MS - serverNow;
   const sorted = sortPlayers(players);
   const rank = sorted.findIndex((p) => p.id === me.id) + 1;
+  const teams = room.teams ?? [];
+  const myTeam = me.team !== undefined ? teams[me.team] : undefined;
+  const standings = teams.length ? teamStandings(players, teams, room.teamScoring ?? 'avg') : [];
+  const teamRank = standings.findIndex((t) => t.index === me.team) + 1;
+  const teamLine =
+    myTeam && teamRank > 0 ? (
+      <p className="team-line">
+        فريقك <b>{myTeam}</b> في المركز <b>#{teamRank}</b> من {teams.length}
+      </p>
+    ) : null;
 
   async function submit(choice: number | number[] | string) {
     if (!user || hasAnswered || sending) return;
@@ -142,6 +152,7 @@ export default function Play() {
     } else if (leadLeft > 0) {
       body = (
         <div className="player-msg">
+          {q.double && <span className="double-badge is-big">نقط دابل ×2</span>}
           <Countdown leftMs={leadLeft} text={q.text} />
         </div>
       );
@@ -160,6 +171,7 @@ export default function Play() {
             </span>
             <Timer remainingMs={remainingMs} totalMs={q.timeLimit * 1000} />
           </div>
+          {q.double && <span className="double-badge">نقط دابل ×2</span>}
           <h2 className="player-q-text">{q.text}</h2>
           <QuestionImage src={q.imageUrl} className="q-image-small" />
           <AnswerInput key={qIndex} question={q} sending={sending} onSubmit={submit} />
@@ -187,6 +199,7 @@ export default function Play() {
         <p className="rank-big">#{rank}</p>
         <p className="big-msg">{me.score} نقطة</p>
         <p className="muted">من {players.length} لاعب</p>
+        {teamLine}
       </div>
     );
   } else {
@@ -195,6 +208,8 @@ export default function Play() {
         <p className="muted">المسابقة خلصت، ترتيبك</p>
         <p className="rank-big">#{rank}</p>
         <p className="big-msg">{me.score} نقطة</p>
+        {standings[0] && <p className="team-line">الفريق الكسبان: <b>{standings[0].name}</b> 🎉</p>}
+        {teamLine}
       </div>
     );
   }
@@ -202,7 +217,10 @@ export default function Play() {
   return (
     <main className="player">
       <header className="player-bar">
-        <span className="player-name">{me.name}</span>
+        <span className="player-name">
+          {me.name}
+          {myTeam && <small className="player-team"> · {myTeam}</small>}
+        </span>
         <span className="player-score">{me.score}</span>
       </header>
       {body}

@@ -14,6 +14,7 @@ import {
   MAX_ACCEPTED,
   MAX_OPTIONS,
   MAX_POINTS,
+  MAX_TEAMS,
   MAX_TIME,
   MIN_TIME,
   newQuestion,
@@ -25,6 +26,7 @@ import {
   TYPE_ICONS,
   TYPE_LABELS,
   validateQuiz,
+  validateSettings,
 } from '../lib/quiz';
 import { SHAPES } from '../components/OptionTile';
 import { SlidePreview } from '../components/SlidePreview';
@@ -236,6 +238,12 @@ export default function QuizEditor() {
 
   async function goLive() {
     if (!user) return;
+    const settingsIssue = validateSettings(settings);
+    if (settingsIssue) {
+      setQuizSettingsOpen(true);
+      setProblem(settingsIssue);
+      return;
+    }
     const issue = validateQuiz(slides);
     if (issue) {
       select(issue.index);
@@ -575,6 +583,13 @@ export default function QuizEditor() {
                     onChange={(v) => editCurrent({ speedBonus: v })}
                     indent
                   />
+                  <Switch
+                    label="نقط دابل ×2"
+                    help="اللي يجاوب صح ياخد ضعف النقط، وبيظهر للكل إن السؤال ده دابل."
+                    checked={current.double}
+                    onChange={(v) => editCurrent({ double: v })}
+                    indent
+                  />
                 </div>
 
                 {/* الوقت */}
@@ -663,6 +678,51 @@ export default function QuizEditor() {
                         onChange={(e) => setSetting({ backgroundUrl: e.target.value })}
                       />
                     </label>
+                  )}
+                  <Switch
+                    label="العب كفرق"
+                    help="كل لاعب بيختار فريقه وهو داخل، والترتيب بيبقى للفرق."
+                    checked={settings.teamsEnabled}
+                    onChange={(v) => setSetting({ teamsEnabled: v })}
+                  />
+                  {settings.teamsEnabled && (
+                    <div className="teams-edit">
+                      {settings.teams.map((t, ti) => (
+                        <div key={ti} className="opt-line">
+                          <span className={`opt-cell-num team-dot-${ti}`}>{ti + 1}</span>
+                          <input
+                            value={t}
+                            maxLength={30}
+                            placeholder={`فريق ${ti + 1}`}
+                            aria-label={`اسم فريق ${ti + 1}`}
+                            onChange={(e) => setSetting({ teams: settings.teams.map((x, k) => (k === ti ? e.target.value : x)) })}
+                          />
+                          <button
+                            className="opt-cell-btn"
+                            disabled={settings.teams.length <= 2}
+                            onClick={() => setSetting({ teams: settings.teams.filter((_, k) => k !== ti) })}
+                            aria-label="امسح الفريق"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      ))}
+                      {settings.teams.length < MAX_TEAMS && (
+                        <button className="btn btn-line btn-small" onClick={() => setSetting({ teams: [...settings.teams, ''] })}>
+                          + ضيف فريق
+                        </button>
+                      )}
+                      <label className="panel-field panel-inline">
+                        <span>نقط الفريق</span>
+                        <select
+                          value={settings.teamScoring}
+                          onChange={(e) => setSetting({ teamScoring: e.target.value === 'sum' ? 'sum' : 'avg' })}
+                        >
+                          <option value="avg">متوسط نقط اللاعبين</option>
+                          <option value="sum">مجموع نقط اللاعبين</option>
+                        </select>
+                      </label>
+                    </div>
                   )}
                   <Switch
                     label="نقط زيادة للإجابات الصح ورا بعض"

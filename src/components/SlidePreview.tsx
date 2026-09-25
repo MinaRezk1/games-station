@@ -1,4 +1,4 @@
-import { OptionTile } from './OptionTile';
+import { BarChart } from './BarChart';
 import { QuestionImage } from './QuestionImage';
 import { themeStyle } from '../lib/quiz';
 import type { Question, QuizSettings } from '../types';
@@ -34,6 +34,7 @@ export function SlidePreview({ slide, settings, number, total }: Props) {
           <p className="slide-q-num">
             سؤال {number} من {total}
           </p>
+          {slide.double && <span className="double-badge">نقط دابل ×2</span>}
           <div className="slide-q-head">
             <h3 className={`slide-q-text ${slide.text.trim() ? '' : 'is-empty'}`}>{slide.text.trim() || 'اكتب السؤال…'}</h3>
           </div>
@@ -47,16 +48,12 @@ export function SlidePreview({ slide, settings, number, total }: Props) {
               ))}
             </ul>
           ) : (
-            <div className={`options slide-options count-${slide.options.length}`}>
-              {slide.options.map((o, i) => (
-                <OptionTile
-                  key={i}
-                  index={i}
-                  text={o || '…'}
-                  image={slide.type === 'choice' && slide.optionImages[i]?.startsWith('https://') ? slide.optionImages[i] : undefined}
-                  state={slide.correct.includes(i) ? 'correct' : 'normal'}
-                />
-              ))}
+            <div className="slide-chart">
+              <BarChart
+                options={slide.options.map((o) => o || '…')}
+                images={slide.options.map((_, i) => (slide.type === 'choice' && slide.optionImages[i]?.startsWith('https://') ? slide.optionImages[i] : ''))}
+                highlight={slide.correct}
+              />
             </div>
           )}
         </div>

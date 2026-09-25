@@ -15,7 +15,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { normalizeAnswer } from './text';
-import { countQuestions, questionNumber } from './quiz';
+import { activeTeams, countQuestions, questionNumber } from './quiz';
 import type { QuestionType, Quiz, RevealData, Room } from '../types';
 
 // وقت إضافي صغير عشان النت البطيء
@@ -58,6 +58,8 @@ export async function createRoom(quiz: Quiz, uid: string): Promise<string> {
         questionStartedAt: null,
         questionEndsAt: null,
         reveal: null,
+        teams: activeTeams(quiz.settings),
+        teamScoring: quiz.settings.teamScoring,
         createdAt: serverTimestamp(),
       });
       return true;
@@ -119,7 +121,8 @@ export async function startQuestion(
       options: perm.map((i) => q.options[i]),
       optionImages: q.type === 'choice' ? perm.map((i) => q.optionImages[i] ?? '') : [],
       timeLimit: q.timeLimit,
-      points: q.points,
+      points: q.points * (q.double ? 2 : 1),
+      double: q.double,
       multi: q.type === 'choice' && q.correct.length > 1,
     },
     reveal: null,
@@ -222,7 +225,9 @@ export async function revealQuestion(roomRef: DocumentReference, quiz: Quiz): Pr
       const correct = !!r?.correct;
       const prevStreak = (p.get('streak') as number | undefined) ?? 0;
       const streak = correct ? prevStreak + 1 : 0;
-      const base = correct ? calcPoints(r!.at - startedMs, limitMs, q.points, q.minPoints, q.speedBonus) : 0;
+      const base = correct
+        ? calcPoints(r!.at - startedMs, limitMs, q.points, q.minPoints, q.speedBonus) * (q.double ? 2 : 1)
+        : 0;
       const bonus = correct && quiz.settings.streakBonus && streak > 1 ? Math.min(500, 100 * (streak - 1)) : 0;
       batch.update(p.ref, {
         score: increment(base + bonus),

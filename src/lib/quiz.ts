@@ -1,4 +1,4 @@
-import type { Question, QuestionType, Quiz, QuizSettings, SlideType, ThemeId } from '../types';
+import type { Question, QuestionType, Quiz, QuizSettings, SlideType, TeamScoring, ThemeId } from '../types';
 
 export const TIME_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
 export const MAX_OPTIONS = 6;
@@ -44,7 +44,16 @@ export const THEMES: { id: ThemeId; label: string }[] = [
   { id: 'custom', label: 'صورة من عندك' },
 ];
 
-export const DEFAULT_SETTINGS: QuizSettings = { questionType: 'choice', streakBonus: false, theme: 'classic', backgroundUrl: '' };
+export const MAX_TEAMS = 6;
+export const DEFAULT_SETTINGS: QuizSettings = {
+  questionType: 'choice',
+  streakBonus: false,
+  teamsEnabled: false,
+  teams: ['بنات', 'ولاد'],
+  teamScoring: 'avg',
+  theme: 'classic',
+  backgroundUrl: '',
+};
 
 export function isQuestion(s: Question): s is Question & { type: QuestionType } {
   return s.type !== 'leaderboard';
@@ -70,6 +79,7 @@ export function newQuestion(type: SlideType = 'choice'): Question {
     points: 1000,
     minPoints: 500,
     speedBonus: true,
+    double: false,
     shuffle: false,
     accepted: [] as string[],
   };
@@ -98,6 +108,7 @@ export function changeType(q: Question, type: SlideType): Question {
     points: q.points,
     minPoints: q.minPoints,
     speedBonus: q.speedBonus,
+    double: q.double,
   };
   const keepOptions = (q.type === 'choice' || q.type === 'order') && (type === 'choice' || type === 'order');
   return {
@@ -138,6 +149,7 @@ export function normalizeQuestion(raw: unknown): Question {
     points,
     minPoints: Math.min(points, Math.max(0, minPoints)),
     speedBonus: r.speedBonus !== false,
+    double: !!r.double,
     shuffle: !!r.shuffle,
   };
 }
@@ -147,6 +159,9 @@ export function normalizeSettings(raw: unknown, fallbackType: QuestionType = 'ch
   return {
     questionType: QUESTION_TYPES.includes(r.questionType as QuestionType) ? (r.questionType as QuestionType) : fallbackType,
     streakBonus: !!r.streakBonus,
+    teamsEnabled: !!r.teamsEnabled,
+    teams: Array.isArray(r.teams) && r.teams.length ? r.teams.map((t) => String(t)).slice(0, MAX_TEAMS) : [...DEFAULT_SETTINGS.teams],
+    teamScoring: (r.teamScoring === 'sum' ? 'sum' : 'avg') as TeamScoring,
     theme: THEME_IDS.includes(r.theme as ThemeId) ? (r.theme as ThemeId) : 'classic',
     backgroundUrl: String(r.backgroundUrl ?? ''),
   };
@@ -199,6 +214,18 @@ export function validateQuestion(q: Question, n: number): string | null {
       return null;
     }
   }
+}
+
+export function activeTeams(settings: QuizSettings): string[] {
+  return settings.teamsEnabled ? settings.teams.map((t) => t.trim()).filter(Boolean) : [];
+}
+
+export function validateSettings(settings: QuizSettings): string | null {
+  if (!settings.teamsEnabled) return null;
+  const teams = activeTeams(settings);
+  if (teams.length < 2) return 'اكتب اسم فريقين على الأقل، أو اقفل اللعب كفرق.';
+  if (new Set(teams).size !== teams.length) return 'فيه فريقين ليهم نفس الاسم.';
+  return null;
 }
 
 // بيرجّع أول مشكلة في المسابقة ورقم السلايد بتاعها

@@ -14,9 +14,14 @@ export default function Home() {
   const [name, setName] = useState(readLocal('gs-name'));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [teams, setTeams] = useState<string[] | null>(null);
 
   async function join(e: FormEvent) {
     e.preventDefault();
+    await doJoin(null);
+  }
+
+  async function doJoin(team: number | null) {
     const cleanCode = code.replace(/\D/g, '');
     const cleanName = name.trim().slice(0, 30);
     if (cleanCode.length !== 6) return setError('الكود لازم يبقى 6 أرقام.');
@@ -38,7 +43,17 @@ export default function Home() {
       const playerRef = doc(db, 'rooms', cleanCode, 'players', user.uid);
       const existing = await getDoc(playerRef);
       if (!existing.exists()) {
-        await setDoc(playerRef, { name: cleanName, score: 0, joinedAt: serverTimestamp() });
+        const roomTeams = (roomSnap.data() as Room).teams ?? [];
+        if (roomTeams.length > 0 && team === null) {
+          setTeams(roomTeams);
+          return;
+        }
+        await setDoc(playerRef, {
+          name: cleanName,
+          score: 0,
+          joinedAt: serverTimestamp(),
+          ...(roomTeams.length > 0 && team !== null ? { team } : {}),
+        });
       }
       writeLocal('gs-name', cleanName);
       nav(`/play/${cleanCode}`);
@@ -62,7 +77,10 @@ export default function Home() {
             placeholder="000000"
             className="code-input"
             value={code}
-            onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
+            onChange={(e) => {
+              setCode(e.target.value.replace(/\D/g, ''));
+              setTeams(null);
+            }}
           />
         </label>
         <label className="field">
@@ -70,9 +88,20 @@ export default function Home() {
           <input maxLength={30} value={name} onChange={(e) => setName(e.target.value)} placeholder="مثلاً: مينا" />
         </label>
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn btn-brand btn-wide btn-tall" disabled={busy}>
-          {busy ? 'بندخلك…' : 'ادخل'}
-        </button>
+        {teams ? (
+          <div className="team-pick">
+            <p>اختار فريقك</p>
+            {teams.map((t, i) => (
+              <button key={i} type="button" className={`btn btn-tall btn-wide team-btn team-btn-${i}`} disabled={busy} onClick={() => doJoin(i)}>
+                {t}
+              </button>
+            ))}
+          </div>
+        ) : (
+          <button className="btn btn-brand btn-wide btn-tall" disabled={busy}>
+            {busy ? 'بندخلك…' : 'ادخل'}
+          </button>
+        )}
       </form>
       <Link to="/admin" className="admin-link">
         دخول المسؤول

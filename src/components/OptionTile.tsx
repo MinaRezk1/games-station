@@ -1,32 +1,40 @@
-export const SHAPES = ['▲', '◆', '●', '■'];
+export const SHAPES = ['▲', '◆', '●', '■', '★', '⬢'];
 
 interface Props {
   index: number;
   text: string;
-  state?: 'normal' | 'correct' | 'dim';
+  state?: 'normal' | 'correct' | 'dim' | 'selected';
   count?: number;
-  max?: number;
+  total?: number;
   onClick?: () => void;
   disabled?: boolean;
   big?: boolean;
 }
 
-export function OptionTile({ index, text, state = 'normal', count, max, onClick, disabled, big }: Props) {
-  const className = `opt opt-${index} ${state !== 'normal' ? `is-${state}` : ''} ${big ? 'opt-big' : ''}`;
+export function OptionTile({ index, text, state = 'normal', count, total, onClick, disabled, big }: Props) {
+  const color = index % SHAPES.length;
+  const className = `opt opt-${color} ${state !== 'normal' ? `is-${state}` : ''} ${big ? 'opt-big' : ''}`;
+  const pct = count !== undefined && total ? Math.round((count / total) * 100) : 0;
   const content = (
     <>
+      {count !== undefined && <span className="opt-fill" style={{ width: `${pct}%` }} aria-hidden="true" />}
       <span className="opt-shape" aria-hidden="true">
-        {SHAPES[index]}
+        {SHAPES[color]}
       </span>
       <span className="opt-text">{text}</span>
       {count !== undefined && (
         <span className="opt-count">
-          <span className="opt-bar" style={{ width: `${max ? (count / max) * 100 : 0}%` }} />
           <b>{count}</b>
+          <small>{pct}%</small>
         </span>
       )}
       {state === 'correct' && (
         <span className="opt-check" aria-label="الإجابة الصح">
+          ✓
+        </span>
+      )}
+      {state === 'selected' && (
+        <span className="opt-check" aria-label="مختار">
           ✓
         </span>
       )}
@@ -35,7 +43,7 @@ export function OptionTile({ index, text, state = 'normal', count, max, onClick,
 
   if (onClick) {
     return (
-      <button type="button" className={className} onClick={onClick} disabled={disabled}>
+      <button type="button" className={className} onClick={onClick} disabled={disabled} aria-pressed={state === 'selected'}>
         {content}
       </button>
     );

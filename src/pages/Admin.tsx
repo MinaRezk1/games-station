@@ -15,6 +15,7 @@ import { auth, db, googleProvider, isAdminEmail } from '../firebase';
 import { useAuthUser } from '../hooks/useAuthUser';
 import { friendlyError } from '../lib/errors';
 import { createRoom } from '../lib/game';
+import { DEFAULT_SETTINGS, normalizeQuiz, validateQuestion } from '../lib/quiz';
 import type { Quiz } from '../types';
 
 export default function Admin() {
@@ -31,7 +32,7 @@ export default function Admin() {
     return onSnapshot(
       query(collection(db, 'quizzes'), where('ownerId', '==', user.uid)),
       (s) => {
-        const list = s.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Quiz, 'id'>) }));
+        const list = s.docs.map((d) => normalizeQuiz(d.id, d.data()));
         list.sort((a, b) => (b.updatedAt?.toMillis() ?? Date.now()) - (a.updatedAt?.toMillis() ?? Date.now()));
         setQuizzes(list);
       },
@@ -56,6 +57,7 @@ export default function Admin() {
         ownerId: user.uid,
         title: 'مسابقة جديدة',
         questions: [],
+        settings: DEFAULT_SETTINGS,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -79,6 +81,10 @@ export default function Admin() {
   async function goLive(quiz: Quiz) {
     if (!user) return;
     if (quiz.questions.length === 0) return setError('ضيف أسئلة للمسابقة الأول.');
+    for (let i = 0; i < quiz.questions.length; i++) {
+      const problem = validateQuestion(quiz.questions[i], i + 1);
+      if (problem) return setError(`${quiz.title}: ${problem}`);
+    }
     setBusyId(quiz.id);
     try {
       const code = await createRoom(quiz, user.uid);
@@ -98,7 +104,7 @@ export default function Admin() {
         <h1 className="page-title">دخول المسؤول</h1>
         <p className="muted">سجّل دخول بحساب جوجل المسموح له يعمل مسابقات.</p>
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn btn-ink" onClick={login}>
+        <button className="btn btn-brand" onClick={login}>
           الدخول بحساب جوجل
         </button>
       </main>
@@ -124,7 +130,7 @@ export default function Admin() {
       <header className="page-head">
         <h1 className="page-title">مسابقاتك</h1>
         <div className="row">
-          <button className="btn btn-ink" onClick={newQuiz} disabled={busyId === 'new'}>
+          <button className="btn btn-brand" onClick={newQuiz} disabled={busyId === 'new'}>
             مسابقة جديدة
           </button>
           <button className="btn btn-line" onClick={() => signOut(auth)}>
@@ -140,7 +146,7 @@ export default function Admin() {
       ) : quizzes.length === 0 ? (
         <div className="empty">
           <p>لسه ماعملتش أي مسابقة.</p>
-          <button className="btn btn-ink" onClick={newQuiz}>
+          <button className="btn btn-brand" onClick={newQuiz}>
             اعمل أول مسابقة
           </button>
         </div>
@@ -153,7 +159,7 @@ export default function Admin() {
                 <p className="muted">{q.questions.length} سؤال</p>
               </div>
               <div className="row">
-                <button className="btn btn-gold" onClick={() => goLive(q)} disabled={busyId === q.id}>
+                <button className="btn btn-brand" onClick={() => goLive(q)} disabled={busyId === q.id}>
                   {busyId === q.id ? 'بنفتح…' : 'ابدأ لايف'}
                 </button>
                 <button className="btn btn-line" onClick={() => nav(`/admin/quiz/${q.id}`)}>

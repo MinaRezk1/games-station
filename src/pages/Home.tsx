@@ -50,10 +50,10 @@ export default function Home() {
   }
 
   return (
-    <main className="stage stage-center">
+    <main className="player player-center join-page">
       <form className="join" onSubmit={join}>
         <h1 className="brand">Games Station</h1>
-        <label className="field-dark">
+        <label className="field">
           <span>كود المسابقة</span>
           <input
             inputMode="numeric"
@@ -65,12 +65,12 @@ export default function Home() {
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ''))}
           />
         </label>
-        <label className="field-dark">
+        <label className="field">
           <span>اسمك</span>
           <input maxLength={30} value={name} onChange={(e) => setName(e.target.value)} placeholder="مثلاً: مينا" />
         </label>
         {error && <p className="error" role="alert">{error}</p>}
-        <button className="btn btn-gold btn-wide" disabled={busy}>
+        <button className="btn btn-brand btn-wide btn-tall" disabled={busy}>
           {busy ? 'بندخلك…' : 'ادخل'}
         </button>
       </form>

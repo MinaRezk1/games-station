@@ -14,33 +14,30 @@ import {
   type DocumentReference,
 } from 'firebase/firestore';
 import { db } from '../firebase';
-import type { Quiz, Room } from '../types';
+import { normalizeAnswer } from './text';
+import type { Quiz, RevealData, Room } from '../types';
 
-// وقت إضافي صغير عشان النت البطيء، اللاعب مايتظلمش
+// وقت إضافي صغير عشان النت البطيء
 export const GRACE_MS = 1500;
+// العد التنازلي قبل كل سؤال (الموبايلات بتستلم السؤال فيه)
+export const LEAD_MS = 4000;
 
-export const TIME_OPTIONS = [10, 15, 20, 30, 45, 60];
-
-// أقصى نقط 1000 لو جاوب فوراً، وبتقل لحد 500 لو جاوب في آخر ثانية
-export function calcPoints(elapsedMs: number, limitMs: number): number {
-  if (limitMs <= 0) return 0;
+// لو النقط على حسب السرعة: أقصى نقط لو جاوب فوراً، ونصها لو جاوب في آخر ثانية
+export function calcPoints(elapsedMs: number, limitMs: number, maxPoints: number, speedBonus: boolean): number {
+  if (!speedBonus) return maxPoints;
+  if (limitMs <= 0) return maxPoints;
   const ratio = Math.min(1, Math.max(0, elapsedMs / limitMs));
-  return Math.round(1000 * (1 - ratio / 2));
+  return Math.round(maxPoints * (1 - ratio / 2));
 }
 
 export function joinUrl(code: string): string {
   return `${window.location.origin}${import.meta.env.BASE_URL}#/join/${code}`;
 }
 
-export function roomRefFor(code: string): DocumentReference {
-  return doc(db, 'rooms', code);
-}
-
-// بيعمل غرفة جديدة بكود من 6 أرقام مش مستخدم قبل كده
 export async function createRoom(quiz: Quiz, uid: string): Promise<string> {
   for (let attempt = 0; attempt < 8; attempt++) {
     const code = String(Math.floor(100000 + Math.random() * 900000));
-    const ref = roomRefFor(code);
+    const ref = doc(db, 'rooms', code);
     const created = await runTransaction(db, async (tx) => {
       const snap = await tx.get(ref);
       if (snap.exists()) return false;
@@ -54,8 +51,7 @@ export async function createRoom(quiz: Quiz, uid: string): Promise<string> {
         question: null,
         questionStartedAt: null,
         questionEndsAt: null,
-        correctIndex: null,
-        answerCounts: null,
+        reveal: null,
         createdAt: serverTimestamp(),
       });
       return true;
@@ -66,14 +62,27 @@ export async function createRoom(quiz: Quiz, uid: string): Promise<string> {
 }
 
 // بيحسب الفرق بين ساعة الجهاز وساعة سيرفر جوجل
-export async function syncServerClock(roomRef: DocumentReference): Promise<number> {
+export async function syncServerClock(ref: DocumentReference): Promise<number> {
   const before = Date.now();
-  await updateDoc(roomRef, { clockSync: serverTimestamp() });
+  await updateDoc(ref, { clockSync: serverTimestamp() });
   const acked = Date.now();
-  const snap = await getDocFromServer(roomRef);
+  const snap = await getDocFromServer(ref);
   const server = (snap.get('clockSync') as Timestamp | undefined)?.toMillis();
   if (!server) return 0;
   return server - (before + acked) / 2;
+}
+
+function shuffledPerm(n: number, avoidIdentity: boolean): number[] {
+  const identity = Array.from({ length: n }, (_, i) => i);
+  for (let tries = 0; tries < 10; tries++) {
+    const p = [...identity];
+    for (let i = n - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [p[i], p[j]] = [p[j], p[i]];
+    }
+    if (!avoidIdentity || n < 2 || p.some((v, i) => v !== i)) return p;
+  }
+  return identity;
 }
 
 export async function startQuestion(
@@ -83,15 +92,38 @@ export async function startQuestion(
   clockOffset: number,
 ): Promise<void> {
   const q = quiz.questions[index];
-  await updateDoc(roomRef, {
+  const needsShuffle = q.type === 'order' || (q.type === 'choice' && q.shuffle);
+  const perm = needsShuffle
+    ? shuffledPerm(q.options.length, q.type === 'order')
+    : q.options.map((_, i) => i);
+  const startMs = Date.now() + clockOffset + LEAD_MS;
+
+  const batch = writeBatch(db);
+  // ترتيب الخلط بيتحفظ في مكان المسؤول بس يشوفه
+  batch.set(doc(roomRef, 'secret', 'current'), { qIndex: index, perm });
+  batch.update(roomRef, {
     status: 'question',
     currentIndex: index,
-    question: { text: q.text, options: q.options, timeLimit: q.timeLimit },
-    correctIndex: null,
-    answerCounts: null,
-    questionStartedAt: serverTimestamp(),
-    questionEndsAt: Timestamp.fromMillis(Date.now() + clockOffset + q.timeLimit * 1000 + GRACE_MS),
+    question: {
+      type: q.type,
+      text: q.text,
+      imageUrl: q.imageUrl,
+      options: perm.map((i) => q.options[i]),
+      timeLimit: q.timeLimit,
+      points: q.points,
+      multi: q.type === 'choice' && q.correct.length > 1,
+    },
+    reveal: null,
+    questionStartedAt: Timestamp.fromMillis(startMs),
+    questionEndsAt: Timestamp.fromMillis(startMs + q.timeLimit * 1000 + GRACE_MS),
   });
+  await batch.commit();
+}
+
+function toIntList(c: unknown): number[] {
+  if (typeof c === 'number' && Number.isInteger(c)) return [c];
+  if (Array.isArray(c)) return c.filter((x): x is number => typeof x === 'number' && Number.isInteger(x));
+  return [];
 }
 
 // بيكشف الإجابة ويحسب نقط كل اللاعبين
@@ -102,23 +134,70 @@ export async function revealQuestion(roomRef: DocumentReference, quiz: Quiz): Pr
 
   const i = room.currentIndex;
   const q = quiz.questions[i];
+  const n = q.options.length;
   const startedMs = room.questionStartedAt?.toMillis() ?? 0;
   const limitMs = q.timeLimit * 1000;
+
+  const secretSnap = await getDocFromServer(doc(roomRef, 'secret', 'current'));
+  const savedPerm = secretSnap.exists() && secretSnap.get('qIndex') === i ? (secretSnap.get('perm') as number[]) : null;
+  const perm = savedPerm && savedPerm.length === n ? savedPerm : q.options.map((_, k) => k);
 
   const [answersSnap, playersSnap] = await Promise.all([
     getDocs(query(collection(roomRef, 'answers'), where('qIndex', '==', i))),
     getDocs(collection(roomRef, 'players')),
   ]);
 
-  const counts = q.options.map(() => 0);
-  const byUid = new Map<string, { choice: number; at: number }>();
+  const sortedCorrect = [...q.correct].sort((a, b) => a - b);
+  const accepted = q.accepted.map(normalizeAnswer).filter(Boolean);
+  const counts: number[] = new Array(n).fill(0);
+  const tally = new Map<string, { text: string; count: number; correct: boolean }>();
+  const results = new Map<string, { correct: boolean; at: number }>();
+
   answersSnap.forEach((d) => {
-    const a = d.data() as { uid: string; choice: number; answeredAt?: Timestamp };
-    if (a.choice >= 0 && a.choice < counts.length) counts[a.choice]++;
-    byUid.set(a.uid, { choice: a.choice, at: a.answeredAt?.toMillis() ?? startedMs + limitMs });
+    const a = d.data() as { uid: string; choice: unknown; answeredAt?: Timestamp };
+    const at = a.answeredAt?.toMillis() ?? startedMs + limitMs;
+    let correct = false;
+
+    if (q.type === 'choice' || q.type === 'truefalse') {
+      const picks = [...new Set(toIntList(a.choice).filter((x) => x >= 0 && x < n))];
+      picks.forEach((x) => counts[x]++);
+      const orig = picks.map((x) => perm[x]).sort((x, y) => x - y);
+      correct = orig.length === sortedCorrect.length && orig.every((v, k) => v === sortedCorrect[k]);
+    } else if (q.type === 'order') {
+      const seq = toIntList(a.choice);
+      correct = seq.length === n && seq.every((dIdx, k) => perm[dIdx] === k);
+    } else {
+      const raw = typeof a.choice === 'string' ? a.choice.trim().slice(0, 100) : '';
+      const norm = normalizeAnswer(raw);
+      correct = !!norm && accepted.includes(norm);
+      if (norm) {
+        const t = tally.get(norm) ?? { text: raw, count: 0, correct };
+        t.count++;
+        tally.set(norm, t);
+      }
+    }
+    results.set(a.uid, { correct, at });
   });
 
-  const roomUpdate = { status: 'reveal', correctIndex: q.correctIndex, answerCounts: counts };
+  let correctCount = 0;
+  results.forEach((r) => {
+    if (r.correct) correctCount++;
+  });
+
+  const reveal: RevealData = {
+    correct:
+      q.type === 'order'
+        ? q.options.map((_, k) => perm.indexOf(k))
+        : q.type === 'short'
+          ? []
+          : q.correct.map((c) => perm.indexOf(c)).filter((x) => x >= 0),
+    counts: q.type === 'choice' || q.type === 'truefalse' ? counts : [],
+    accepted: q.type === 'short' ? q.accepted.filter((a) => a.trim()) : [],
+    topAnswers: [...tally.values()].sort((a, b) => b.count - a.count).slice(0, 8),
+    correctCount,
+    answerCount: answersSnap.size,
+  };
+  const roomUpdate = { status: 'reveal', reveal };
   const players = playersSnap.docs;
 
   if (players.length === 0) {
@@ -130,14 +209,19 @@ export async function revealQuestion(roomRef: DocumentReference, quiz: Quiz): Pr
   for (let start = 0; start < players.length; start += CHUNK) {
     const batch = writeBatch(db);
     for (const p of players.slice(start, start + CHUNK)) {
-      const ans = byUid.get(p.id);
-      const correct = !!ans && ans.choice === q.correctIndex;
-      const points = correct ? calcPoints(ans!.at - startedMs, limitMs) : 0;
+      const r = results.get(p.id);
+      const correct = !!r?.correct;
+      const prevStreak = (p.get('streak') as number | undefined) ?? 0;
+      const streak = correct ? prevStreak + 1 : 0;
+      const base = correct ? calcPoints(r!.at - startedMs, limitMs, q.points, q.speedBonus) : 0;
+      const bonus = correct && quiz.settings.streakBonus && streak > 1 ? Math.min(500, 100 * (streak - 1)) : 0;
       batch.update(p.ref, {
-        score: increment(points),
-        lastPoints: points,
+        score: increment(base + bonus),
+        lastPoints: base + bonus,
+        lastBonus: bonus,
         lastCorrect: correct,
         lastQ: i,
+        streak,
       });
     }
     if (start + CHUNK >= players.length) batch.update(roomRef, roomUpdate);

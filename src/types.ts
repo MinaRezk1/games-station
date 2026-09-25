@@ -1,10 +1,26 @@
 import type { Timestamp } from 'firebase/firestore';
 
+export type QuestionType = 'choice' | 'truefalse' | 'short' | 'order';
+
 export interface Question {
+  type: QuestionType;
   text: string;
+  imageUrl: string;
+  // choice / truefalse: الاختيارات. order: العناصر بالترتيب الصح. short: فاضية
   options: string[];
-  correctIndex: number;
+  // choice / truefalse: أرقام الإجابات الصح
+  correct: number[];
+  // short: الإجابات المقبولة
+  accepted: string[];
   timeLimit: number; // بالثواني
+  points: number; // أقصى نقط للسؤال
+  speedBonus: boolean; // النقط بتقل مع الوقت
+  shuffle: boolean; // خلط ترتيب الاختيارات
+}
+
+export interface QuizSettings {
+  streakBonus: boolean;
+  showLeaderboard: boolean;
 }
 
 export interface Quiz {
@@ -12,16 +28,30 @@ export interface Quiz {
   ownerId: string;
   title: string;
   questions: Question[];
+  settings: QuizSettings;
   updatedAt?: Timestamp | null;
 }
 
 export type RoomStatus = 'lobby' | 'question' | 'reveal' | 'leaderboard' | 'ended';
 
-// السؤال زي ما اللاعبين بيشوفوه: من غير الإجابة الصح
+// السؤال زي ما اللاعبين بيشوفوه: من غير الإجابة الصح، والاختيارات بترتيب العرض
 export interface PublicQuestion {
+  type: QuestionType;
   text: string;
+  imageUrl: string;
   options: string[];
   timeLimit: number;
+  points: number;
+  multi: boolean;
+}
+
+export interface RevealData {
+  correct: number[]; // choice/truefalse: أرقام الإجابات الصح بترتيب العرض. order: الترتيب الصح بأرقام العرض
+  counts: number[]; // choice/truefalse: عدد اللي اختار كل اختيار
+  accepted: string[]; // short
+  topAnswers: { text: string; count: number; correct: boolean }[]; // short
+  correctCount: number;
+  answerCount: number;
 }
 
 export interface Room {
@@ -34,8 +64,7 @@ export interface Room {
   question: PublicQuestion | null;
   questionStartedAt: Timestamp | null;
   questionEndsAt: Timestamp | null;
-  correctIndex: number | null;
-  answerCounts: number[] | null;
+  reveal: RevealData | null;
 }
 
 export interface Player {
@@ -43,6 +72,8 @@ export interface Player {
   name: string;
   score: number;
   lastPoints?: number;
+  lastBonus?: number;
   lastCorrect?: boolean;
   lastQ?: number;
+  streak?: number;
 }
